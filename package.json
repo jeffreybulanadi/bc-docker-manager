@@ -1,0 +1,394 @@
+{
+  "name": "bc-docker-manager",
+  "displayName": "BC Docker Manager",
+  "description": "Manage Microsoft Dynamics 365 Business Central Docker containers and images from inside VS Code.",
+  "version": "0.2402.2052",
+  "icon": "resources/bc-docker.png",
+  "publisher": "jeffreybulanadi",
+  "author": {
+    "name": "Jeffrey Bulanadi"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jeffreybulanadi/bc-docker-manager.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jeffreybulanadi/bc-docker-manager/issues"
+  },
+  "homepage": "https://github.com/jeffreybulanadi/bc-docker-manager#readme",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "docker",
+    "business central",
+    "dynamics 365",
+    "bc",
+    "container"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "bcDockerManager",
+          "title": "BC Docker Manager",
+          "icon": "resources/icon.png"
+        }
+      ]
+    },
+    "views": {
+      "bcDockerManager": [
+        {
+          "id": "bcDockerManager-environment",
+          "name": "Environment",
+          "icon": "$(pulse)"
+        },
+        {
+          "id": "bcDockerManager-explorer",
+          "name": "BC Artifacts",
+          "icon": "$(globe)"
+        },
+        {
+          "id": "bcDockerManager-containers",
+          "name": "Containers",
+          "icon": "$(server)"
+        },
+        {
+          "id": "bcDockerManager-images",
+          "name": "Local Images",
+          "icon": "$(package)"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "bcDockerManager-explorer",
+        "contents": "Browse available Business Central artifacts.\n[Open BC Artifacts Explorer](command:bcDockerManager.openExplorer)"
+      },
+      {
+        "view": "bcDockerManager-environment",
+        "contents": "Getting Started\n\nTwo things are needed to run BC containers:\n\n1. Enable Hyper-V & Windows Containers\n2. Install Docker Engine\n\n[$(rocket) Setup Everything](command:bcDockerManager.setupAll)",
+        "when": "!bcDockerManager.dockerReady"
+      },
+      {
+        "view": "bcDockerManager-containers",
+        "contents": "Environment is not ready yet.\n[$(rocket) Setup Everything](command:bcDockerManager.setupAll)",
+        "when": "!bcDockerManager.dockerReady"
+      }
+    ],
+    "commands": [
+      {
+        "command": "bcDockerManager.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.refreshRegistry",
+        "title": "Refresh Registry",
+        "icon": "$(refresh)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.startContainer",
+        "title": "Start Container",
+        "icon": "$(play)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.stopContainer",
+        "title": "Stop Container",
+        "icon": "$(debug-stop)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.restartContainer",
+        "title": "Restart Container",
+        "icon": "$(debug-restart)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.removeContainer",
+        "title": "Remove Container",
+        "icon": "$(trash)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.removeImage",
+        "title": "Remove Image",
+        "icon": "$(trash)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.toggleBcFilter",
+        "title": "Toggle BC Filter",
+        "icon": "$(filter)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.openExplorer",
+        "title": "Open BC Artifacts Explorer",
+        "icon": "$(globe)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.testCdn",
+        "title": "Test BC Artifacts CDN Connection",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.startDockerEngine",
+        "title": "Start Docker Engine",
+        "icon": "$(play)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.enableWindowsFeatures",
+        "title": "Enable Hyper-V & Windows Containers",
+        "icon": "$(gear)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.setupAll",
+        "title": "Setup Everything",
+        "icon": "$(rocket)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.installDockerEngine",
+        "title": "Install Docker Engine",
+        "icon": "$(cloud-download)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.refreshEnvironment",
+        "title": "Refresh Environment Status",
+        "icon": "$(refresh)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.generateLaunchJson",
+        "title": "Generate AL Launch Configuration",
+        "icon": "$(file-code)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.openWebClient",
+        "title": "Open Web Client",
+        "icon": "$(globe)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.openTerminal",
+        "title": "Open Container Terminal",
+        "icon": "$(terminal)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.viewLogs",
+        "title": "View Container Logs",
+        "icon": "$(output)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.updateHosts",
+        "title": "Update Hosts File",
+        "icon": "$(globe)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.installCert",
+        "title": "Install SSL Certificate",
+        "icon": "$(shield)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.setupNetworking",
+        "title": "Setup Networking (Hosts + SSL)",
+        "icon": "$(plug)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.copyLaunchJson",
+        "title": "Copy launch.json to Clipboard",
+        "icon": "$(clippy)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.previewLaunchJson",
+        "title": "Preview launch.json in New Tab",
+        "icon": "$(open-preview)",
+        "category": "BC Docker Manager"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "bcDockerManager.refreshEnvironment",
+          "when": "view == bcDockerManager-environment",
+          "group": "navigation@1"
+        },
+        {
+          "command": "bcDockerManager.setupAll",
+          "when": "view == bcDockerManager-environment && !bcDockerManager.dockerReady",
+          "group": "navigation@2"
+        },
+        {
+          "command": "bcDockerManager.refresh",
+          "when": "view == bcDockerManager-containers || view == bcDockerManager-images",
+          "group": "navigation@1"
+        },
+        {
+          "command": "bcDockerManager.toggleBcFilter",
+          "when": "view == bcDockerManager-containers",
+          "group": "navigation@2"
+        },
+        {
+          "command": "bcDockerManager.openExplorer",
+          "when": "view == bcDockerManager-explorer",
+          "group": "navigation@1"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "bcDockerManager.startContainer",
+          "when": "view == bcDockerManager-containers && viewItem == stoppedContainer",
+          "group": "inline@1"
+        },
+        {
+          "command": "bcDockerManager.stopContainer",
+          "when": "view == bcDockerManager-containers && viewItem == runningContainer",
+          "group": "inline@1"
+        },
+        {
+          "command": "bcDockerManager.restartContainer",
+          "when": "view == bcDockerManager-containers && viewItem == runningContainer",
+          "group": "inline@2"
+        },
+        {
+          "command": "bcDockerManager.removeContainer",
+          "when": "view == bcDockerManager-containers && (viewItem == stoppedContainer || viewItem == runningContainer)",
+          "group": "inline@3"
+        },
+        {
+          "command": "bcDockerManager.openWebClient",
+          "when": "view == bcDockerManager-containers && viewItem == runningContainer",
+          "group": "inline@4"
+        },
+        {
+          "command": "bcDockerManager.setupNetworking",
+          "when": "view == bcDockerManager-containers && viewItem == runningContainer",
+          "group": "inline@5"
+        },
+        {
+          "command": "bcDockerManager.startContainer",
+          "when": "view == bcDockerManager-containers && viewItem == stoppedContainer",
+          "group": "container@1"
+        },
+        {
+          "command": "bcDockerManager.stopContainer",
+          "when": "view == bcDockerManager-containers && viewItem == runningContainer",
+          "group": "container@1"
+        },
+        {
+          "command": "bcDockerManager.restartContainer",
+          "when": "view == bcDockerManager-containers && viewItem == runningContainer",
+          "group": "container@2"
+        },
+        {
+          "command": "bcDockerManager.removeContainer",
+          "when": "view == bcDockerManager-containers && (viewItem == stoppedContainer || viewItem == runningContainer)",
+          "group": "container@3"
+        },
+        {
+          "command": "bcDockerManager.removeImage",
+          "when": "view == bcDockerManager-images && viewItem == image",
+          "group": "inline@1"
+        },
+        {
+          "command": "bcDockerManager.removeImage",
+          "when": "view == bcDockerManager-images && viewItem == image",
+          "group": "image@1"
+        },
+        {
+          "command": "bcDockerManager.generateLaunchJson",
+          "when": "view == bcDockerManager-containers && (viewItem == stoppedContainer || viewItem == runningContainer)",
+          "group": "connect@1"
+        },
+        {
+          "command": "bcDockerManager.openWebClient",
+          "when": "view == bcDockerManager-containers && viewItem == runningContainer",
+          "group": "connect@2"
+        },
+        {
+          "command": "bcDockerManager.openTerminal",
+          "when": "view == bcDockerManager-containers && viewItem == runningContainer",
+          "group": "connect@3"
+        },
+        {
+          "command": "bcDockerManager.viewLogs",
+          "when": "view == bcDockerManager-containers && (viewItem == stoppedContainer || viewItem == runningContainer)",
+          "group": "connect@4"
+        },
+        {
+          "command": "bcDockerManager.setupNetworking",
+          "when": "view == bcDockerManager-containers && viewItem == runningContainer",
+          "group": "connect@5"
+        },
+        {
+          "command": "bcDockerManager.updateHosts",
+          "when": "view == bcDockerManager-containers && viewItem == runningContainer",
+          "group": "connect@6"
+        },
+        {
+          "command": "bcDockerManager.installCert",
+          "when": "view == bcDockerManager-containers && viewItem == runningContainer",
+          "group": "connect@7"
+        },
+        {
+          "command": "bcDockerManager.copyLaunchJson",
+          "when": "view == bcDockerManager-containers && (viewItem == stoppedContainer || viewItem == runningContainer)",
+          "group": "connect@8"
+        },
+        {
+          "command": "bcDockerManager.previewLaunchJson",
+          "when": "view == bcDockerManager-containers && (viewItem == stoppedContainer || viewItem == runningContainer)",
+          "group": "connect@9"
+        },
+        {
+          "command": "bcDockerManager.installDockerEngine",
+          "when": "view == bcDockerManager-environment && viewItem == health_docker_error",
+          "group": "inline@1"
+        },
+        {
+          "command": "bcDockerManager.startDockerEngine",
+          "when": "view == bcDockerManager-environment && viewItem == health_docker_warn",
+          "group": "inline@1"
+        },
+        {
+          "command": "bcDockerManager.enableWindowsFeatures",
+          "when": "view == bcDockerManager-environment && viewItem =~ /health_features_(error|warn)/",
+          "group": "inline@1"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^2.22.0",
+    "typescript": "^5.3.0"
+  }
+}
