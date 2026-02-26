@@ -1,0 +1,13 @@
+.vscode/**
+.git/**
+.gitignore
+.gitattributes
+src/**
+Scripts/**
+node_modules/**
+tsconfig.json
+package-lock.json
+**/*.map
+**/*.ts
+!out/**
+tmpclaude-*

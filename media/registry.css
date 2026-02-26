@@ -1,0 +1,361 @@
+/* ================================================================
+ * BC Artifacts Explorer — Webview Styles
+ * Uses VS Code CSS custom properties for full theme integration.
+ * ================================================================ */
+
+:root {
+  --bg: var(--vscode-editor-background);
+  --fg: var(--vscode-editor-foreground);
+  --border: var(--vscode-panel-border, var(--vscode-editorGroup-border, #444));
+  --header-bg: var(--vscode-editorGroupHeader-tabsBackground, #252526);
+  --hover-bg: var(--vscode-list-hoverBackground, #2a2d2e);
+  --input-bg: var(--vscode-input-background, #3c3c3c);
+  --input-border: var(--vscode-input-border, #3c3c3c);
+  --input-fg: var(--vscode-input-foreground, #ccc);
+  --button-bg: var(--vscode-button-background, #0e639c);
+  --button-fg: var(--vscode-button-foreground, #fff);
+  --button-hover: var(--vscode-button-hoverBackground, #1177bb);
+  --button-secondary-bg: var(--vscode-button-secondaryBackground, #3a3d41);
+  --button-secondary-fg: var(--vscode-button-secondaryForeground, #fff);
+  --button-secondary-hover: var(--vscode-button-secondaryHoverBackground, #45494e);
+  --badge-bg: var(--vscode-badge-background, #4d4d4d);
+  --badge-fg: var(--vscode-badge-foreground, #fff);
+  --link: var(--vscode-textLink-foreground, #3794ff);
+  --desc: var(--vscode-descriptionForeground, #888);
+  --focus-border: var(--vscode-focusBorder, #007fd4);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--vscode-font-family, "Segoe UI", sans-serif);
+  font-size: var(--vscode-font-size, 13px);
+  color: var(--fg);
+  background: var(--bg);
+  overflow: hidden;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* -- Header -------------------------------------------------- */
+.header {
+  padding: 14px 20px 0 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.header .logo {
+  font-size: 18px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  letter-spacing: -0.2px;
+}
+
+.header .logo .icon {
+  width: 34px;
+  height: 34px;
+  background: var(--button-bg);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--button-fg);
+  letter-spacing: -0.5px;
+}
+
+/* -- Tabs ---------------------------------------------------- */
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  padding: 0 20px;
+  margin-top: 10px;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.tab {
+  padding: 8px 18px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  color: var(--desc);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  user-select: none;
+  transition: color 0.15s ease, border-bottom-color 0.15s ease;
+  border-radius: 4px 4px 0 0;
+}
+
+.tab:hover {
+  color: var(--fg);
+  background: var(--hover-bg);
+}
+
+.tab.active {
+  color: var(--fg);
+  border-bottom-color: var(--link);
+}
+
+/* -- Toolbar ------------------------------------------------- */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.toolbar label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--desc);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 180px;
+  max-width: 380px;
+}
+
+.search-box input,
+.filter-group select {
+  width: 100%;
+  padding: 5px 10px;
+  background: var(--input-bg);
+  color: var(--input-fg);
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.search-box input::placeholder {
+  color: var(--desc);
+  opacity: 0.7;
+}
+
+.search-box input:focus,
+.filter-group select:focus {
+  border-color: var(--focus-border);
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.filter-group select {
+  min-width: 85px;
+  cursor: pointer;
+}
+
+.status-text {
+  font-size: 11px;
+  color: var(--desc);
+  margin-left: auto;
+  opacity: 0.85;
+}
+
+/* -- Table --------------------------------------------------- */
+.table-wrapper {
+  flex: 1;
+  overflow: auto;
+  padding: 0 20px 20px 20px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+th {
+  background: var(--header-bg);
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--desc);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  transition: color 0.15s ease;
+}
+
+th:hover { color: var(--fg); }
+th .sort-icon { font-size: 10px; margin-left: 4px; opacity: 0.8; }
+
+td {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  transition: background 0.1s ease;
+}
+
+tr:hover td { background: var(--hover-bg); }
+
+.col-type    { width: 90px; }
+.col-major   { width: 70px; }
+.col-version { width: 200px; }
+.col-country { width: 80px; }
+.col-date    { width: 120px; }
+.col-actions { width: 270px; }
+
+/* -- Badges -------------------------------------------------- */
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  line-height: 1.4;
+}
+
+.badge-sandbox {
+  background: rgba(55, 148, 255, 0.12);
+  color: #3794ff;
+  border: 1px solid rgba(55, 148, 255, 0.25);
+}
+
+.badge-onprem {
+  background: rgba(204, 167, 0, 0.12);
+  color: #cca700;
+  border: 1px solid rgba(204, 167, 0, 0.25);
+}
+
+/* -- Buttons ------------------------------------------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-family: inherit;
+  font-weight: 500;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: 1.4;
+  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-fg);
+  margin-right: 4px;
+}
+
+.btn:hover {
+  background: var(--button-secondary-hover);
+}
+
+.btn:active {
+  opacity: 0.85;
+}
+
+.btn:focus-visible {
+  outline: 1px solid var(--focus-border);
+  outline-offset: 1px;
+}
+
+.btn-primary {
+  background: var(--button-bg);
+  color: var(--button-fg);
+  border-color: transparent;
+}
+
+.btn-primary:hover {
+  background: var(--button-hover);
+}
+
+.btn-create {
+  background: #1a8a2e;
+  color: #fff;
+  border-color: transparent;
+  font-weight: 600;
+}
+
+.btn-create:hover {
+  background: #20a436;
+}
+
+/* -- States -------------------------------------------------- */
+.state-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  color: var(--desc);
+  gap: 12px;
+  font-size: 13px;
+}
+
+.state-box span {
+  opacity: 0.85;
+}
+
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--link);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.error-text {
+  color: var(--vscode-errorForeground, #f44747);
+  opacity: 1 !important;
+}
+
+/* -- Scrollbar (Webkit) -------------------------------------- */
+.table-wrapper::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.table-wrapper::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.table-wrapper::-webkit-scrollbar-thumb {
+  background: var(--vscode-scrollbarSlider-background, rgba(121, 121, 121, 0.4));
+  border-radius: 5px;
+}
+
+.table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: var(--vscode-scrollbarSlider-hoverBackground, rgba(100, 100, 100, 0.7));
+}

@@ -1,0 +1,19 @@
+node_modules/
+out/
+*.vsix
+.vscode-test/
+
+# Build artifacts
+*.js.map
+
+# OS files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+
+# Editor backup / temp
+*.swp
+*.swo
+*~
+tmpclaude-*
