@@ -2,7 +2,7 @@
   "name": "bc-docker-manager",
   "displayName": "BC Docker Manager",
   "description": "Manage Microsoft Dynamics 365 Business Central Docker containers and images from inside VS Code.",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "icon": "resources/bc-docker.png",
   "publisher": "jeffreybulanadi",
   "author": {
