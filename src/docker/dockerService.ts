@@ -342,6 +342,7 @@ export class DockerService {
     log?.(`Artifact: ${opts.artifactUrl}`);
     log?.(`Auth:     ${opts.auth || "UserPassword"}`);
     log?.(`Memory:   ${opts.memoryLimit || "4G"}`);
+    log?.(`Pull:     always (ensuring latest generic image)`);
     log?.("");
 
     // Build the docker run command
@@ -455,6 +456,7 @@ export class DockerService {
   private buildRunArgs(opts: BcContainerOptions, image: string): string[] {
     const args: string[] = [
       "run", "-d",
+      "--pull", "always",
       "--name", opts.containerName,
       "--hostname", opts.containerName,
       "--memory", opts.memoryLimit || "4G",
