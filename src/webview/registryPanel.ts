@@ -204,7 +204,7 @@ export class RegistryPanel {
           artifactUrl,
           username,
           password,
-          memoryLimit: "4G",
+          memoryLimit: "8G",
           auth: "UserPassword",
           updateHosts: true,
         },

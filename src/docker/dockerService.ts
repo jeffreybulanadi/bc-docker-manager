@@ -341,7 +341,7 @@ export class DockerService {
     log?.(`Image:    ${image}`);
     log?.(`Artifact: ${opts.artifactUrl}`);
     log?.(`Auth:     ${opts.auth || "UserPassword"}`);
-    log?.(`Memory:   ${opts.memoryLimit || "4G"}`);
+    log?.(`Memory:   ${opts.memoryLimit || "8G"}`);
     log?.(`Pull:     always (ensuring latest generic image)`);
     log?.("");
 
@@ -459,8 +459,13 @@ export class DockerService {
       "--pull", "always",
       "--name", opts.containerName,
       "--hostname", opts.containerName,
-      "--memory", opts.memoryLimit || "4G",
+      "--memory", opts.memoryLimit || "8G",
       "--isolation", opts.isolation || "hyperv",
+      // Explicit DNS: Hyper-V containers often fail to resolve Azure
+      // Front Door CDN hostnames with the inherited host DNS, which
+      // causes artifact downloads to return error pages instead of ZIPs.
+      "--dns", "8.8.8.8",
+      "--dns", "8.8.4.4",
       // No -p port mappings: Hyper-V containers get their own NAT IP,
       // so we access them via hostname/IP directly. Publishing ports
       // would conflict when running multiple containers.
