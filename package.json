@@ -2,7 +2,7 @@
   "name": "bc-docker-manager",
   "displayName": "BC Docker Manager",
   "description": "A lightweight control center for Business Central Docker development inside VS Code. Manage containers, browse artifacts, set up your environment, and generate AL configurations, without BcContainerHelper or Docker Desktop.",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "icon": "resources/bc-docker.png",
   "publisher": "jeffreybulanadi",
   "author": {
