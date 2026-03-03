@@ -212,7 +212,7 @@ export class RegistryPanel {
       );
 
       // Wait for the container to fully initialize (downloads artifacts, installs BC, etc.)
-      const ready = await vscode.window.withProgress(
+      const containerReady = await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
           title: `Initializing container "${name}"`,
@@ -226,7 +226,7 @@ export class RegistryPanel {
 
       vscode.commands.executeCommand("bcDockerManager.refresh");
 
-      if (!ready) {
+      if (!containerReady) {
         output.appendLine(`\nWARNING: Health check timed out, but the container may still be initializing.`);
         output.appendLine(`Proceeding with networking setup anyway...`);
       }

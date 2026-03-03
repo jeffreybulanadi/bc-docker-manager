@@ -265,8 +265,9 @@ export async function activate(
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "bcDockerManager.openWebClient",
-      async (item: ContainerTreeItem) => {
-        const name = item.container.names;
+      async (item?: ContainerTreeItem) => {
+        const name = item?.container.names ?? await pickRunningContainer(docker);
+        if (!name) { return; }
 
         // Make sure the container is running and has an IP
         const ip = await docker.getContainerIp(name);
@@ -344,8 +345,9 @@ export async function activate(
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "bcDockerManager.openTerminal",
-      async (item: ContainerTreeItem) => {
-        const name = item.container.names;
+      async (item?: ContainerTreeItem) => {
+        const name = item?.container.names ?? await pickRunningContainer(docker);
+        if (!name) { return; }
         const terminal = vscode.window.createTerminal({
           name: `BC: ${name}`,
           shellPath: "powershell.exe",
@@ -366,8 +368,9 @@ export async function activate(
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "bcDockerManager.viewLogs",
-      async (item: ContainerTreeItem) => {
-        const name = item.container.names;
+      async (item?: ContainerTreeItem) => {
+        const name = item?.container.names ?? await pickRunningContainer(docker);
+        if (!name) { return; }
         const terminal = vscode.window.createTerminal({
           name: `Logs: ${name}`,
           shellPath: "powershell.exe",
@@ -386,7 +389,8 @@ export async function activate(
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "bcDockerManager.startContainer",
-      async (item: ContainerTreeItem) => {
+      async (item?: ContainerTreeItem) => {
+        if (!item) { return; }
         try {
           await withProgress(`Starting "${item.container.names}"...`, () =>
             docker.startContainer(item.container.id)
@@ -405,7 +409,8 @@ export async function activate(
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "bcDockerManager.stopContainer",
-      async (item: ContainerTreeItem) => {
+      async (item?: ContainerTreeItem) => {
+        if (!item) { return; }
         try {
           await withProgress(`Stopping "${item.container.names}"...`, () =>
             docker.stopContainer(item.container.id)
@@ -424,7 +429,8 @@ export async function activate(
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "bcDockerManager.restartContainer",
-      async (item: ContainerTreeItem) => {
+      async (item?: ContainerTreeItem) => {
+        if (!item) { return; }
         try {
           await withProgress(`Restarting "${item.container.names}"...`, () =>
             docker.restartContainer(item.container.id)
@@ -443,7 +449,8 @@ export async function activate(
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "bcDockerManager.removeContainer",
-      async (item: ContainerTreeItem) => {
+      async (item?: ContainerTreeItem) => {
+        if (!item) { return; }
         const answer = await vscode.window.showWarningMessage(
           `Remove container "${item.container.names}"? This cannot be undone.`,
           { modal: true },
@@ -467,7 +474,8 @@ export async function activate(
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "bcDockerManager.removeImage",
-      async (item: ImageTreeItem) => {
+      async (item?: ImageTreeItem) => {
+        if (!item) { return; }
         const label = `${item.image.repository}:${item.image.tag}`;
         const answer = await vscode.window.showWarningMessage(
           `Remove image "${label}"? This cannot be undone.`,
@@ -515,7 +523,7 @@ function showError(action: string, name: string, err: unknown): void {
  */
 async function pickRunningContainer(docker: DockerService): Promise<string | undefined> {
   const containers = await docker.getContainers();
-  const running = containers.filter((c: { state: string }) => c.state === "running");
+  const running = containers.filter((c: { state: string }) => c.state.toLowerCase() === "running");
   if (running.length === 0) {
     vscode.window.showWarningMessage("No running containers found.");
     return undefined;

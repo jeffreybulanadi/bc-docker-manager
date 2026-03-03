@@ -347,9 +347,16 @@ export class DockerService {
 
     // Build the docker run command
     const args = this.buildRunArgs(opts, image);
-    const cmdLine = `docker ${args.join(" ")}`;
 
-    // Run in a VS Code terminal for full interactive output
+    // Run in a VS Code terminal for full interactive output.
+    // We must quote each argument individually so that passwords
+    // containing spaces, $, @, quotes, etc. are not mangled by PowerShell.
+    const quotedArgs = args.map((a) => {
+      // Escape single quotes inside the value, then wrap in single quotes
+      const escaped = a.replace(/'/g, "''");
+      return `'${escaped}'`;
+    });
+    const cmdLine = `docker ${quotedArgs.join(" ")}`;
     const terminal = vscode.window.createTerminal({
       name: `BC: ${opts.containerName}`,
       shellPath: "powershell.exe",
@@ -535,8 +542,11 @@ export class DockerService {
         "C:\\Windows\\System32\\drivers\\etc\\hosts",
         "utf-8",
       );
+      // Match: <IP-whitespace><containerName><optional-whitespace><end-of-line>
+      // The \b prevents false-matching a longer name that contains this one.
+      const escaped = containerName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const pattern = new RegExp(
-        `\\s${containerName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`,
+        `\\s${escaped}\\b\\s*$`,
         "m",
       );
       return pattern.test(hosts);

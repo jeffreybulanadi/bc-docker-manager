@@ -157,7 +157,7 @@ export class BcArtifactsService {
     const countries = JSON.parse(body) as string[];
     this._memCache.set(cacheKey, countries as unknown as { Version: string; CreationTime: string }[]);
     this._writeDiskCache(cacheKey, countries);
-    return countries.sort();
+    return countries.slice().sort();
   }
 
   /**
