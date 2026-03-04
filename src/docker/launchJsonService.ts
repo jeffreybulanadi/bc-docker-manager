@@ -221,8 +221,11 @@ export class LaunchJsonService {
   /**
    * Minimal JSONC comment stripper — handles // and /* ... *\/ style
    * comments outside of strings.
+   * Also strips a leading UTF-8 BOM (\uFEFF) if present.
    */
   static stripJsonComments(text: string): string {
+    // Remove BOM that Windows tools may prepend to UTF-8 files
+    text = text.replace(/^\uFEFF/, "");
     let result = "";
     let i = 0;
     let inString = false;

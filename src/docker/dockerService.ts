@@ -542,14 +542,16 @@ export class DockerService {
         "C:\\Windows\\System32\\drivers\\etc\\hosts",
         "utf-8",
       );
-      // Match: <IP-whitespace><containerName><optional-whitespace><end-of-line>
-      // The \b prevents false-matching a longer name that contains this one.
       const escaped = containerName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const pattern = new RegExp(
-        `\\s${escaped}\\b\\s*$`,
-        "m",
-      );
-      return pattern.test(hosts);
+      // Match: <whitespace><containerName><word-boundary><optional-whitespace><end-of-line>
+      // Skip comment lines (lines where the first non-whitespace char is '#')
+      // to avoid false-positives like: "# 1.2.3.4  containerName"
+      const linePattern = new RegExp(`\\s${escaped}\\b\\s*$`);
+      for (const line of hosts.split("\n")) {
+        if (line.trimStart().startsWith("#")) { continue; }
+        if (linePattern.test(line)) { return true; }
+      }
+      return false;
     } catch {
       return false;
     }

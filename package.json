@@ -2,7 +2,7 @@
   "name": "bc-docker-manager",
   "displayName": "BC Docker Manager",
   "description": "A lightweight control center for Business Central Docker development inside VS Code. Manage containers, browse artifacts, set up your environment, and generate AL configurations, without BcContainerHelper or Docker Desktop.",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "icon": "resources/bc-docker.png",
   "publisher": "jeffreybulanadi",
   "author": {
@@ -383,12 +383,16 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "package": "vsce package"
+    "package": "vsce package",
+    "test": "jest"
   },
   "devDependencies": {
+    "@types/jest": "^29.5.0",
     "@types/node": "^20.11.0",
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^2.22.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.0",
     "typescript": "^5.3.0"
   }
 }

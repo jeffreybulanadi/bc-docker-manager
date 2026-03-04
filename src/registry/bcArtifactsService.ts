@@ -112,7 +112,7 @@ export class BcArtifactsService {
 
   private _diskCachePath(key: string): string | undefined {
     if (!this._diskCacheDir) { return undefined; }
-    return path.join(this._diskCacheDir, key.replace("/", "_") + ".json");
+    return path.join(this._diskCacheDir, key.replace(/\//g, "_") + ".json");
   }
 
   private _readDiskCache(key: string): { Version: string; CreationTime: string }[] | undefined {
@@ -294,6 +294,6 @@ export class BcArtifactsService {
   }
 
   dispose(): void {
-    // No agent to destroy with fetch()
+    this._memCache.clear();
   }
 }
