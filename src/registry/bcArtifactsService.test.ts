@@ -331,3 +331,217 @@ describe("BcArtifactsService.dispose", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
+
+// ─── empty CDN response ──────────────────────────────────────────
+
+describe("BcArtifactsService — empty CDN response", () => {
+  it("getVersions returns empty array", async () => {
+    const svc = makeService(mockFetchJson([]));
+    const versions = await svc.getVersions("sandbox", "us");
+    expect(versions).toEqual([]);
+  });
+
+  it("getLatestVersions returns empty versions and totalCount 0", async () => {
+    const svc = makeService(mockFetchJson([]));
+    const result = await svc.getLatestVersions("sandbox", "us", 10);
+    expect(result).toEqual({ versions: [], totalCount: 0 });
+  });
+
+  it("getVersionsGroupedByMajor returns empty Map", async () => {
+    const svc = makeService(mockFetchJson([]));
+    const grouped = await svc.getVersionsGroupedByMajor("sandbox", "us");
+    expect(grouped).toBeInstanceOf(Map);
+    expect(grouped.size).toBe(0);
+  });
+
+  it("getLatestPerMajor returns empty array", async () => {
+    const svc = makeService(mockFetchJson([]));
+    const result = await svc.getLatestPerMajor("sandbox", "us");
+    expect(result).toEqual([]);
+  });
+});
+
+// ─── unusual version formats ─────────────────────────────────────
+
+describe("BcArtifactsService — unusual version formats", () => {
+  it("version with 2 parts — major=27, minor=4", async () => {
+    const svc = makeService(mockFetchJson([rawEntry("27.4")]));
+    const versions = await svc.getVersions("sandbox", "us");
+    expect(versions[0].major).toBe(27);
+    expect(versions[0].minor).toBe(4);
+  });
+
+  it("version with 1 part — major=27, minor=0", async () => {
+    const svc = makeService(mockFetchJson([rawEntry("27")]));
+    const versions = await svc.getVersions("sandbox", "us");
+    expect(versions[0].major).toBe(27);
+    expect(versions[0].minor).toBe(0);
+  });
+
+  it("version with 5 parts — major=27, minor=4", async () => {
+    const svc = makeService(mockFetchJson([rawEntry("27.4.1.2.3")]));
+    const versions = await svc.getVersions("sandbox", "us");
+    expect(versions[0].major).toBe(27);
+    expect(versions[0].minor).toBe(4);
+  });
+
+  it("empty version string — major=0, minor=0", async () => {
+    const svc = makeService(mockFetchJson([rawEntry("")]));
+    const versions = await svc.getVersions("sandbox", "us");
+    expect(versions[0].major).toBe(0);
+    expect(versions[0].minor).toBe(0);
+  });
+});
+
+// ─── setStoragePath failure ──────────────────────────────────────
+
+describe("BcArtifactsService.setStoragePath — failure", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "bc-artifacts-test-"));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("silently disables disk caching when mkdirSync fails", async () => {
+    // Place a file where the cache directory would be created so mkdirSync fails
+    const cacheDir = path.join(tmpDir, "artifact-cache");
+    fs.writeFileSync(cacheDir, "block");
+
+    const svc = makeService(mockFetchJson([rawEntry("27.0.0.0")]));
+    svc.setStoragePath(tmpDir);
+
+    const versions = await svc.getVersions("sandbox", "us");
+    expect(versions).toHaveLength(1);
+
+    // artifact-cache is still a file, not a directory — disk caching was disabled
+    expect(fs.statSync(cacheDir).isDirectory()).toBe(false);
+  });
+});
+
+// ─── corrupt disk cache ──────────────────────────────────────────
+
+describe("BcArtifactsService — corrupt disk cache", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "bc-artifacts-test-"));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("falls back to network fetch when disk cache contains invalid JSON", async () => {
+    const cacheDir = path.join(tmpDir, "artifact-cache");
+    fs.mkdirSync(cacheDir, { recursive: true });
+    fs.writeFileSync(path.join(cacheDir, "sandbox_us.json"), "not json{{{");
+
+    const fetchMock = mockFetchJson([rawEntry("27.0.0.0")]);
+    const svc = makeService(fetchMock);
+    svc.setStoragePath(tmpDir);
+    const versions = await svc.getVersions("sandbox", "us");
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(versions).toHaveLength(1);
+  });
+});
+
+// ─── cache isolation between types ───────────────────────────────
+
+describe("BcArtifactsService — cache isolation between types", () => {
+  it("calls fetch separately for different artifact types", async () => {
+    const fetchMock = mockFetchJson([rawEntry("27.0.0.0")]);
+    const svc = makeService(fetchMock);
+    await svc.getVersions("sandbox", "us");
+    await svc.getVersions("onprem", "us");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("calls fetch only once for the same type/country", async () => {
+    const fetchMock = mockFetchJson([rawEntry("27.0.0.0")]);
+    const svc = makeService(fetchMock);
+    await svc.getVersions("sandbox", "us");
+    await svc.getVersions("sandbox", "us");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ─── getCountries — memory cache hit ─────────────────────────────
+
+describe("BcArtifactsService.getCountries — memory cache hit", () => {
+  it("only calls fetch once for repeated getCountries calls", async () => {
+    const fetchMock = mockFetchJson(["us", "de", "w1"]);
+    const svc = makeService(fetchMock);
+    await svc.getCountries("sandbox");
+    await svc.getCountries("sandbox");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ─── getCountries — disk cache hit ───────────────────────────────
+
+describe("BcArtifactsService.getCountries — disk cache hit", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "bc-artifacts-test-"));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("second service reads countries from disk cache without fetching", async () => {
+    const countries = ["us", "de", "w1"];
+    const fetchMock1 = mockFetchJson(countries);
+    const svc1 = makeService(fetchMock1);
+    svc1.setStoragePath(tmpDir);
+    await svc1.getCountries("sandbox");
+    expect(fetchMock1).toHaveBeenCalledTimes(1);
+
+    const fetchMock2 = mockFetchJson(countries);
+    const svc2 = makeService(fetchMock2);
+    svc2.setStoragePath(tmpDir);
+    await svc2.getCountries("sandbox");
+    expect(fetchMock2).not.toHaveBeenCalled();
+  });
+});
+
+// ─── getLatestVersions — edge cases ──────────────────────────────
+
+describe("BcArtifactsService.getLatestVersions — edge cases", () => {
+  it("limit=0 returns empty versions with correct totalCount", async () => {
+    const raw = [rawEntry("27.0.0.0"), rawEntry("26.0.0.0")];
+    const svc = makeService(mockFetchJson(raw));
+    const { versions, totalCount } = await svc.getLatestVersions("sandbox", "us", 0);
+    expect(versions).toEqual([]);
+    expect(totalCount).toBe(2);
+  });
+
+  it("limit larger than total returns all versions", async () => {
+    const raw = [rawEntry("27.0.0.0"), rawEntry("26.0.0.0")];
+    const svc = makeService(mockFetchJson(raw));
+    const { versions, totalCount } = await svc.getLatestVersions("sandbox", "us", 100);
+    expect(versions).toHaveLength(2);
+    expect(totalCount).toBe(2);
+  });
+});
+
+// ─── version sorting stability ───────────────────────────────────
+
+describe("BcArtifactsService — version sorting stability", () => {
+  it("sorts versions with same major.minor by patch (newest first)", async () => {
+    const raw = [
+      rawEntry("27.4.45366.46000"),
+      rawEntry("27.4.45366.46497"),
+    ];
+    const svc = makeService(mockFetchJson(raw));
+    const versions = await svc.getVersions("sandbox", "us");
+    expect(versions[0].version).toBe("27.4.45366.46497");
+    expect(versions[1].version).toBe("27.4.45366.46000");
+  });
+});

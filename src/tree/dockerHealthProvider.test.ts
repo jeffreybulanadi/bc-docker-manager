@@ -310,3 +310,244 @@ describe("DockerHealthProvider.startDockerEngine", () => {
     expect(result).toBe(false);
   });
 });
+
+// ─── HealthCheckItem — status icons ──────────────────────────────
+
+describe("HealthCheckItem — status icons", () => {
+  const { HealthCheckItem } = require("./dockerHealthProvider");
+
+  it("uses pass-filled icon with green color for ok status", () => {
+    const item = new HealthCheckItem({
+      id: "test", label: "Test", status: "ok", detail: "All good",
+    });
+    expect((item.iconPath as any).id).toBe("pass-filled");
+    expect((item.iconPath as any).color.id).toBe("charts.green");
+  });
+
+  it("uses warning icon with yellow color for warn status", () => {
+    const item = new HealthCheckItem({
+      id: "test", label: "Test", status: "warn", detail: "Warning",
+    });
+    expect((item.iconPath as any).id).toBe("warning");
+    expect((item.iconPath as any).color.id).toBe("charts.yellow");
+  });
+
+  it("uses error icon with red color for error status", () => {
+    const item = new HealthCheckItem({
+      id: "test", label: "Test", status: "error", detail: "Bad",
+    });
+    expect((item.iconPath as any).id).toBe("error");
+    expect((item.iconPath as any).color.id).toBe("charts.red");
+  });
+
+  it("uses sync~spin icon for checking status", () => {
+    const item = new HealthCheckItem({
+      id: "test", label: "Test", status: "checking", detail: "...",
+    });
+    expect((item.iconPath as any).id).toBe("sync~spin");
+  });
+});
+
+// ─── HealthCheckItem — fixCommand ────────────────────────────────
+
+describe("HealthCheckItem — fixCommand", () => {
+  const { HealthCheckItem } = require("./dockerHealthProvider");
+
+  it("sets command when fixCommand is provided", () => {
+    const item = new HealthCheckItem({
+      id: "test", label: "Test", status: "error", detail: "Bad",
+      fixCommand: "myExtension.fix",
+    });
+    expect(item.command).toBeDefined();
+    expect(item.command!.command).toBe("myExtension.fix");
+  });
+
+  it("leaves command undefined when fixCommand is not provided", () => {
+    const item = new HealthCheckItem({
+      id: "test", label: "Test", status: "ok", detail: "Good",
+    });
+    expect(item.command).toBeUndefined();
+  });
+});
+
+// ─── HealthCheckItem — tooltip ───────────────────────────────────
+
+describe("HealthCheckItem — tooltip", () => {
+  const { HealthCheckItem } = require("./dockerHealthProvider");
+
+  it("tooltip contains OK for ok status", () => {
+    const item = new HealthCheckItem({
+      id: "test", label: "Test", status: "ok", detail: "Fine",
+    });
+    expect((item.tooltip as any).value).toContain("OK");
+  });
+
+  it("tooltip contains Not Available for error status", () => {
+    const item = new HealthCheckItem({
+      id: "test", label: "Test", status: "error", detail: "Bad",
+    });
+    expect((item.tooltip as any).value).toContain("Not Available");
+  });
+
+  it("tooltip contains Click to fix when fixCommand is set", () => {
+    const item = new HealthCheckItem({
+      id: "test", label: "Test", status: "error", detail: "Bad",
+      fixCommand: "myExtension.fix",
+    });
+    expect((item.tooltip as any).value).toContain("Click to fix");
+  });
+
+  it("tooltip does not contain Click to fix when fixCommand is absent", () => {
+    const item = new HealthCheckItem({
+      id: "test", label: "Test", status: "error", detail: "Bad",
+    });
+    expect((item.tooltip as any).value).not.toContain("Click to fix");
+  });
+});
+
+// ─── DockerHealthProvider.getChildren ────────────────────────────
+
+describe("DockerHealthProvider.getChildren", () => {
+  it("returns HealthCheckItem array after running checks", async () => {
+    const { HealthCheckItem } = require("./dockerHealthProvider");
+    const provider = createProvider();
+    mockExec.mockImplementation(
+      (cmd: string, _opts: any, cb: any) => {
+        if (cmd === "docker --version") {
+          cb(null, "Docker version 24.0.7, build afdd53b\n", "");
+        } else if (cmd.includes("powershell")) {
+          cb(null, "Enabled\n", "");
+        } else {
+          cb(null, "ok\n", "");
+        }
+      },
+    );
+    await (provider as any)._runChecks();
+
+    const children = await provider.getChildren();
+    expect(Array.isArray(children)).toBe(true);
+    expect(children.length).toBeGreaterThan(0);
+    expect(children.every((c: any) => c instanceof HealthCheckItem)).toBe(true);
+    provider.dispose();
+  });
+});
+
+// ─── DockerHealthProvider.dispose ────────────────────────────────
+
+describe("DockerHealthProvider.dispose", () => {
+  it("makes _runChecks a no-op after dispose", async () => {
+    const provider = createProvider();
+    mockExec.mockImplementation(
+      (cmd: string, _opts: any, cb: any) => {
+        if (cmd === "docker --version") {
+          cb(null, "Docker version 24.0.7, build afdd53b\n", "");
+        } else if (cmd.includes("powershell")) {
+          cb(null, "Enabled\n", "");
+        } else {
+          cb(null, "ok\n", "");
+        }
+      },
+    );
+    await (provider as any)._runChecks();
+    const healthyBefore = provider.isAllHealthy;
+
+    provider.dispose();
+
+    // Sabotage exec so any real call would flip isAllHealthy
+    mockExec.mockImplementation(
+      (_cmd: string, _opts: any, cb: any) => { cb(new Error("fail"), "", ""); },
+    );
+    await (provider as any)._runChecks();
+    expect(provider.isAllHealthy).toBe(healthyBefore);
+  });
+
+  it("clears the timer after dispose", () => {
+    const provider = createProvider();
+    provider.dispose();
+    expect((provider as any)._timer).toBeUndefined();
+  });
+});
+
+// ─── _checkWindowsFeatures — partial service availability ────────
+
+describe("_checkWindowsFeatures — partial service availability", () => {
+  it("returns error with Containers when vmms exists but vmcompute does not", async () => {
+    const provider = createProvider();
+    mockExec.mockImplementation(
+      (cmd: string, _opts: any, cb: any) => {
+        if (cmd.includes("powershell")) {
+          cb(new Error("access denied"), "", "");
+        } else if (cmd.includes("vmms")) {
+          cb(null, "SERVICE_NAME: vmms\n", "");
+        } else if (cmd.includes("vmcompute")) {
+          cb(new Error("1060"), "", "");
+        } else {
+          cb(null, "", "");
+        }
+      },
+    );
+
+    const result = await (provider as any)._checkWindowsFeatures();
+    expect(result.status).toBe("error");
+    expect(result.detail).toContain("Containers");
+    provider.dispose();
+  });
+});
+
+// ─── _checkDockerEngine — version format variations ──────────────
+
+describe("_checkDockerEngine — version format variations", () => {
+  it("extracts 27.5.1 from standard version string", async () => {
+    const provider = createProvider();
+    mockExec.mockImplementation(
+      (cmd: string, _opts: any, cb: any) => {
+        if (cmd === "docker --version") {
+          cb(null, "Docker version 27.5.1, build afdd53b4e3\n", "");
+        } else {
+          cb(null, "Server: Docker Engine\n", "");
+        }
+      },
+    );
+
+    const result = await (provider as any)._checkDockerEngine();
+    expect(result.status).toBe("ok");
+    expect(result.detail).toContain("27.5.1");
+    provider.dispose();
+  });
+
+  it("extracts 24.0.7-ce from CE version string", async () => {
+    const provider = createProvider();
+    mockExec.mockImplementation(
+      (cmd: string, _opts: any, cb: any) => {
+        if (cmd === "docker --version") {
+          cb(null, "Docker version 24.0.7-ce, build 311b9ff\n", "");
+        } else {
+          cb(null, "Server: Docker Engine\n", "");
+        }
+      },
+    );
+
+    const result = await (provider as any)._checkDockerEngine();
+    expect(result.status).toBe("ok");
+    expect(result.detail).toContain("24.0.7-ce");
+    provider.dispose();
+  });
+
+  it("extracts 20.10.24+azure-2 from azure version string", async () => {
+    const provider = createProvider();
+    mockExec.mockImplementation(
+      (cmd: string, _opts: any, cb: any) => {
+        if (cmd === "docker --version") {
+          cb(null, "Docker version 20.10.24+azure-2, build 297e128\n", "");
+        } else {
+          cb(null, "Server: Docker Engine\n", "");
+        }
+      },
+    );
+
+    const result = await (provider as any)._checkDockerEngine();
+    expect(result.status).toBe("ok");
+    expect(result.detail).toContain("20.10.24+azure-2");
+    provider.dispose();
+  });
+});

@@ -136,3 +136,101 @@ describe("ContainerProvider.refresh", () => {
     expect((provider as any)._onDidChangeTreeData.fire).toHaveBeenCalled();
   });
 });
+
+// ─── toggleBcFilter — shows information message ─────────────────
+
+describe("ContainerProvider.toggleBcFilter — shows information message", () => {
+  const vscode = require("vscode");
+
+  it("shows message containing OFF when filter is turned off", () => {
+    const mockDocker = createMockDocker();
+    const provider = new ContainerProvider(mockDocker);
+
+    provider.toggleBcFilter(); // ON → OFF
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      expect.stringContaining("OFF")
+    );
+  });
+
+  it("shows message containing ON when filter is turned back on", () => {
+    const mockDocker = createMockDocker();
+    const provider = new ContainerProvider(mockDocker);
+
+    provider.toggleBcFilter(); // ON → OFF
+    (vscode.window.showInformationMessage as jest.Mock).mockClear();
+
+    provider.toggleBcFilter(); // OFF → ON
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      expect.stringContaining("ON")
+    );
+  });
+});
+
+// ─── getTreeItem ─────────────────────────────────────────────────
+
+describe("ContainerProvider.getTreeItem", () => {
+  it("returns the same element that was passed in", async () => {
+    const mockDocker = createMockDocker();
+    const provider = new ContainerProvider(mockDocker);
+    const items = await provider.getChildren();
+
+    const result = provider.getTreeItem(items[0]);
+
+    expect(result).toBe(items[0]);
+  });
+});
+
+// ─── getChildren — multiple containers ───────────────────────────
+
+describe("ContainerProvider.getChildren — multiple containers", () => {
+  it("returns 3 ContainerTreeItem instances for 3 containers", async () => {
+    const containers: DockerContainer[] = [
+      { ...sampleContainer, id: "c1", names: "/container1" },
+      { ...sampleContainer, id: "c2", names: "/container2" },
+      { ...sampleContainer, id: "c3", names: "/container3" },
+    ];
+    const mockDocker = createMockDocker();
+    (mockDocker.getBcContainers as jest.Mock).mockResolvedValue(containers);
+    const provider = new ContainerProvider(mockDocker);
+
+    const children = await provider.getChildren();
+
+    expect(children).toHaveLength(3);
+    children.forEach((child, i) => {
+      expect(child).toBeInstanceOf(ContainerTreeItem);
+      expect(child.container).toEqual(containers[i]);
+    });
+  });
+});
+
+// ─── getChildren — mixed states ──────────────────────────────────
+
+describe("ContainerProvider.getChildren — mixed states", () => {
+  it("assigns correct contextValue for running and stopped containers", async () => {
+    const runningContainer: DockerContainer = {
+      ...sampleContainer,
+      id: "r1",
+      names: "/running-one",
+      state: "running",
+    };
+    const stoppedContainer: DockerContainer = {
+      ...sampleContainer,
+      id: "s1",
+      names: "/stopped-one",
+      state: "exited",
+      status: "Exited (0) 5 minutes ago",
+    };
+    const mockDocker = createMockDocker();
+    (mockDocker.getBcContainers as jest.Mock).mockResolvedValue([
+      runningContainer,
+      stoppedContainer,
+    ]);
+    const provider = new ContainerProvider(mockDocker);
+
+    const children = await provider.getChildren();
+
+    expect(children).toHaveLength(2);
+    expect(children[0].contextValue).toBe("runningContainer");
+    expect(children[1].contextValue).toBe("stoppedContainer");
+  });
+});

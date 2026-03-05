@@ -151,3 +151,111 @@ describe("DockerSetup.installDockerEngine", () => {
     expect(result).toBe(false);
   });
 });
+
+// ─── isDaemonRunning — default path ─────────────────────────────
+
+describe("isDaemonRunning — default path", () => {
+  it('uses "docker" (default) when no path provided', async () => {
+    mockExec.mockImplementation((cmd: string, opts: unknown, cb: Function) => {
+      cb(null, "", "");
+    });
+    await DockerSetup.isDaemonRunning();
+    expect(mockExec).toHaveBeenCalledWith(
+      '"docker" info',
+      expect.objectContaining({ timeout: 10_000 }),
+      expect.any(Function),
+    );
+  });
+});
+
+// ─── installDockerEngine — reinstall flow ───────────────────────
+
+describe("installDockerEngine — reinstall flow", () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const vscode = require("vscode");
+
+  beforeEach(() => {
+    mockTmpdir.mockReturnValue("C:\\Temp");
+    (fs.writeFileSync as jest.Mock).mockImplementation(() => {});
+    (fs.readFileSync as jest.Mock).mockReturnValue("SUCCESS");
+    (fs.unlinkSync as jest.Mock).mockImplementation(() => {});
+  });
+
+  it("reinstalls when user clicks 'Reinstall / Update' and returns true", async () => {
+    // All exec calls succeed (isDaemonRunning + wrapper script)
+    mockExec.mockImplementation((cmd: string, opts: unknown, cb: Function) => {
+      cb(null, "", "");
+    });
+    // Docker Desktop NOT installed
+    mockExistsSync.mockReturnValue(false);
+    // User clicks "Reinstall / Update"
+    vscode.window.showInformationMessage.mockResolvedValueOnce("Reinstall / Update");
+
+    const result = await DockerSetup.installDockerEngine();
+    expect(result).toBe(true);
+  }, 15_000);
+});
+
+// ─── installDockerEngine — Docker Desktop present, Install Anyway ─
+
+describe("installDockerEngine — Docker Desktop present, Install Anyway", () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const vscode = require("vscode");
+
+  beforeEach(() => {
+    mockTmpdir.mockReturnValue("C:\\Temp");
+    (fs.writeFileSync as jest.Mock).mockImplementation(() => {});
+    (fs.readFileSync as jest.Mock).mockReturnValue("SUCCESS");
+    (fs.unlinkSync as jest.Mock).mockImplementation(() => {});
+  });
+
+  it("installs when user clicks 'Install Anyway' and returns true", async () => {
+    let infoCallCount = 0;
+    mockExec.mockImplementation((cmd: string, opts: unknown, cb: Function) => {
+      if (cmd.includes("info")) {
+        infoCallCount++;
+        if (infoCallCount === 1) {
+          // isDaemonRunning — first check: daemon NOT running
+          cb(new Error("not running"), "", "");
+        } else {
+          // isDaemonRunning — after install: daemon running
+          cb(null, "", "");
+        }
+      } else {
+        // wrapper script exec succeeds
+        cb(null, "", "");
+      }
+    });
+    // Docker Desktop IS installed
+    mockExistsSync.mockImplementation((p: string) =>
+      typeof p === "string" &&
+      (p.includes("Docker Desktop") || p.includes("DockerDesktop")),
+    );
+    // User clicks "Install Anyway"
+    vscode.window.showWarningMessage.mockResolvedValueOnce("Install Anyway");
+
+    const result = await DockerSetup.installDockerEngine();
+    expect(result).toBe(true);
+  }, 15_000);
+});
+
+// ─── installDockerEngine — Docker Desktop present, user cancels ──
+
+describe("installDockerEngine — Docker Desktop present, user cancels", () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const vscode = require("vscode");
+
+  it("returns false when user cancels the Docker Desktop warning", async () => {
+    // isDaemonRunning → false
+    mockExec.mockImplementation((cmd: string, opts: unknown, cb: Function) => {
+      cb(new Error("not running"), "", "");
+    });
+    // Docker Desktop IS installed
+    mockExistsSync.mockReturnValue(true);
+    // User clicks "Cancel"
+    vscode.window.showWarningMessage.mockResolvedValueOnce("Cancel");
+
+    const result = await DockerSetup.installDockerEngine();
+    expect(result).toBe(false);
+  });
+});

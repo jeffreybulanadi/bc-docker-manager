@@ -449,3 +449,291 @@ describe("DockerService.enrichWithLabels", () => {
     expect(containers[0].labels).toEqual({});
   });
 });
+
+// ─── isDockerInstalled ───────────────────────────────────────────
+
+describe("DockerService.isDockerInstalled", () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it("returns true when docker --version succeeds", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = new DockerService() as any;
+    jest.spyOn(svc, "exec").mockResolvedValue("Docker version 24.0.0");
+    expect(await svc.isDockerInstalled()).toBe(true);
+  });
+
+  it("returns false when exec rejects", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = new DockerService() as any;
+    jest.spyOn(svc, "exec").mockRejectedValue(new Error("not found"));
+    expect(await svc.isDockerInstalled()).toBe(false);
+  });
+});
+
+// ─── isDockerRunning ─────────────────────────────────────────────
+
+describe("DockerService.isDockerRunning", () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it("returns true when docker info succeeds", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = new DockerService() as any;
+    jest.spyOn(svc, "exec").mockResolvedValue("some info output");
+    expect(await svc.isDockerRunning()).toBe(true);
+  });
+
+  it("returns false when exec rejects", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = new DockerService() as any;
+    jest.spyOn(svc, "exec").mockRejectedValue(new Error("daemon not running"));
+    expect(await svc.isDockerRunning()).toBe(false);
+  });
+});
+
+// ─── isWindowsContainerMode ──────────────────────────────────────
+
+describe("DockerService.isWindowsContainerMode", () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it("returns true when docker info returns OSType windows", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = new DockerService() as any;
+    jest.spyOn(svc, "exec").mockResolvedValue(JSON.stringify({ OSType: "windows" }));
+    expect(await svc.isWindowsContainerMode()).toBe(true);
+  });
+
+  it("returns false when OSType is linux", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = new DockerService() as any;
+    jest.spyOn(svc, "exec").mockResolvedValue(JSON.stringify({ OSType: "linux" }));
+    expect(await svc.isWindowsContainerMode()).toBe(false);
+  });
+
+  it("returns false when exec rejects", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = new DockerService() as any;
+    jest.spyOn(svc, "exec").mockRejectedValue(new Error("docker not running"));
+    expect(await svc.isWindowsContainerMode()).toBe(false);
+  });
+});
+
+// ─── isCertInstalled ─────────────────────────────────────────────
+
+describe("DockerService.isCertInstalled", () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it("returns true when powershell returns count > 0", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = new DockerService() as any;
+    jest.spyOn(svc, "exec").mockResolvedValue("1\n");
+    expect(await svc.isCertInstalled("mybc")).toBe(true);
+  });
+
+  it("returns false when count is 0", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = new DockerService() as any;
+    jest.spyOn(svc, "exec").mockResolvedValue("0\n");
+    expect(await svc.isCertInstalled("mybc")).toBe(false);
+  });
+
+  it("returns false when exec rejects", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = new DockerService() as any;
+    jest.spyOn(svc, "exec").mockRejectedValue(new Error("powershell error"));
+    expect(await svc.isCertInstalled("mybc")).toBe(false);
+  });
+});
+
+// ─── isHostsIpCurrent ────────────────────────────────────────────
+
+describe("DockerService.isHostsIpCurrent", () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it("returns true when hosts file IP matches container IP", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = new DockerService() as any;
+    jest.spyOn(svc, "getContainerIp").mockResolvedValue("172.17.0.5");
+    (fs.readFileSync as jest.Mock).mockReturnValue("172.17.0.5  mybc\n");
+    expect(await svc.isHostsIpCurrent("mybc")).toBe(true);
+  });
+
+  it("returns false when IP has changed (stale entry)", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = new DockerService() as any;
+    jest.spyOn(svc, "getContainerIp").mockResolvedValue("172.17.0.10");
+    (fs.readFileSync as jest.Mock).mockReturnValue("172.17.0.5  mybc\n");
+    expect(await svc.isHostsIpCurrent("mybc")).toBe(false);
+  });
+
+  it("returns false when no container IP found", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = new DockerService() as any;
+    jest.spyOn(svc, "getContainerIp").mockResolvedValue(undefined);
+    expect(await svc.isHostsIpCurrent("mybc")).toBe(false);
+  });
+
+  it("returns false when hosts file has no entry for container", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = new DockerService() as any;
+    jest.spyOn(svc, "getContainerIp").mockResolvedValue("172.17.0.5");
+    (fs.readFileSync as jest.Mock).mockReturnValue("127.0.0.1  localhost\n");
+    expect(await svc.isHostsIpCurrent("mybc")).toBe(false);
+  });
+});
+
+// ─── didNetworkingJustRun ────────────────────────────────────────
+
+describe("DockerService.didNetworkingJustRun", () => {
+  it("returns false initially", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = new DockerService() as any;
+    expect(await svc.didNetworkingJustRun()).toBe(false);
+  });
+
+  it("reading it resets the flag (second call returns false)", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = new DockerService() as any;
+    svc._networkingJustRan = true;
+    expect(await svc.didNetworkingJustRun()).toBe(true);
+    expect(await svc.didNetworkingJustRun()).toBe(false);
+  });
+});
+
+// ─── looksLikeBcImage (additional edge cases) ────────────────────
+
+describe("DockerService.looksLikeBcImage (more edge cases)", () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const svc = new DockerService() as any;
+  const fn = (name: string): boolean => svc.looksLikeBcImage(name);
+
+  it("matches _bc_container:latest (underscore delimited)", () => {
+    expect(fn("_bc_container:latest")).toBe(true);
+  });
+
+  it("matches registry/bc/image:tag (path segment)", () => {
+    expect(fn("registry/bc/image:tag")).toBe(true);
+  });
+
+  it("does NOT match ABC:latest (bc inside larger word at start)", () => {
+    expect(fn("ABC:latest")).toBe(false);
+  });
+
+  it("case insensitive: BusinessCentral:tag matches", () => {
+    expect(fn("BusinessCentral:tag")).toBe(true);
+  });
+});
+
+// ─── parseLines (missing fields) ─────────────────────────────────
+
+describe("DockerService.parseLines (missing fields)", () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const svc = new DockerService() as any;
+
+  it("JSON line with missing keys still returns object with empty string defaults", () => {
+    const line = JSON.stringify({ ID: "abc" });
+    const result = svc.parseLines(line);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe("abc");
+    expect(result[0].names).toBe("");
+    expect(result[0].image).toBe("");
+    expect(result[0].status).toBe("");
+    expect(result[0].state).toBe("");
+    expect(result[0].ports).toBe("");
+    expect(result[0].createdAt).toBe("");
+  });
+});
+
+// ─── parseImageLines (missing fields) ────────────────────────────
+
+describe("DockerService.parseImageLines (missing fields)", () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const svc = new DockerService() as any;
+
+  it("JSON line with missing keys returns object with empty string defaults", () => {
+    const line = JSON.stringify({ Repository: "myrepo" });
+    const result = svc.parseImageLines(line);
+    expect(result).toHaveLength(1);
+    expect(result[0].repository).toBe("myrepo");
+    expect(result[0].tag).toBe("");
+    expect(result[0].id).toBe("");
+    expect(result[0].size).toBe("");
+    expect(result[0].createdAt).toBe("");
+  });
+});
+
+// ─── enrichWithLabels (additional cases) ─────────────────────────
+
+describe("DockerService.enrichWithLabels (additional cases)", () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it("inspect returns entry with missing Config key — labels stay empty", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = new DockerService() as any;
+    const containers = [
+      { id: "id1", names: "c1", image: "img1", status: "Up", state: "running", ports: "", createdAt: "", labels: {} },
+    ];
+    const inspectJson = JSON.stringify([{ Id: "id1" }]);
+    jest.spyOn(svc, "exec").mockResolvedValue(inspectJson);
+
+    await svc.enrichWithLabels(containers);
+
+    expect(containers[0].labels).toEqual({});
+  });
+
+  it("inspect returns malformed JSON string — labels stay empty", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = new DockerService() as any;
+    const containers = [
+      { id: "id1", names: "c1", image: "img1", status: "Up", state: "running", ports: "", createdAt: "", labels: {} },
+    ];
+    jest.spyOn(svc, "exec").mockResolvedValue("{not valid json[");
+
+    await svc.enrichWithLabels(containers);
+
+    expect(containers[0].labels).toEqual({});
+  });
+});
+
+// ─── buildRunArgs (additional cases) ─────────────────────────────
+
+describe("DockerService.buildRunArgs (additional cases)", () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const svc = new DockerService() as any;
+
+  const baseOpts: BcContainerOptions = {
+    containerName: "bc25us",
+    artifactUrl: "https://bcartifacts.example.com/sandbox/25.0/us",
+    username: "admin",
+    password: "Passw0rd!",
+  };
+  const image = "mcr.microsoft.com/businesscentral:ltsc2022";
+
+  function buildArgs(opts: BcContainerOptions = baseOpts): string[] {
+    return svc.buildRunArgs(opts, image);
+  }
+
+  it("isolation=process is used when specified", () => {
+    const args = buildArgs({ ...baseOpts, isolation: "process" });
+    expect(args[args.indexOf("--isolation") + 1]).toBe("process");
+  });
+
+  it("accept_eula=true explicit still produces Y", () => {
+    const args = buildArgs({ ...baseOpts, accept_eula: true });
+    const found = args.some((a: string) => a === "accept_eula=Y");
+    expect(found).toBe(true);
+  });
+
+  it("all optional fields combined (memoryLimit, licensePath, accept_outdated, isolation)", () => {
+    const args = buildArgs({
+      ...baseOpts,
+      memoryLimit: "16G",
+      licensePath: "//share/file.bclicense",
+      accept_outdated: true,
+      isolation: "process",
+    });
+    expect(args[args.indexOf("--memory") + 1]).toBe("16G");
+    expect(args[args.indexOf("--isolation") + 1]).toBe("process");
+    expect(args.some((a: string) => a === "accept_outdated=Y")).toBe(true);
+    expect(args.some((a: string) => a.startsWith("licenseFile="))).toBe(true);
+  });
+});

@@ -189,3 +189,176 @@ describe("LaunchJsonService.mergeConfig", () => {
     expect(content.configurations).toHaveLength(1);
   });
 });
+
+// ────────────── stripJsonComments — additional edge cases ────────
+
+describe("LaunchJsonService.stripJsonComments — additional edge cases", () => {
+  const strip = LaunchJsonService.stripJsonComments.bind(LaunchJsonService);
+
+  it("returns empty string for empty input", () => {
+    expect(strip("")).toBe("");
+  });
+
+  it("string with only line comments returns only whitespace/newlines", () => {
+    const result = strip("// comment\n// another");
+    expect(result.trim()).toBe("");
+  });
+
+  it("unterminated block comment consumes to end without crashing", () => {
+    expect(() => strip("{ /* unterminated")).not.toThrow();
+  });
+
+  it("handles multiline block comment", () => {
+    const input = '{\n/* line1\nline2 */\n"a":1}';
+    const result = strip(input);
+    expect(JSON.parse(result)).toEqual({ a: 1 });
+  });
+
+  it("handles multiple comments of different types in sequence", () => {
+    const input = '{\n// line comment\n/* block */\n"a":1}';
+    const result = strip(input);
+    expect(JSON.parse(result)).toEqual({ a: 1 });
+  });
+
+  it("handles block comment immediately before closing brace", () => {
+    const input = '{"a":1/* comment */}';
+    const result = strip(input);
+    expect(JSON.parse(result)).toEqual({ a: 1 });
+  });
+
+  it("trailing comma after comment removal does not crash", () => {
+    // Known limitation: trailing commas are not removed by stripJsonComments,
+    // so the result may not be valid JSON, but the function itself should not throw.
+    const input = '{"a":1,/* remove me */}';
+    expect(() => strip(input)).not.toThrow();
+  });
+});
+
+// ─────────── mergeConfig — additional edge cases ─────────────────
+
+describe("LaunchJsonService.mergeConfig — additional edge cases", () => {
+  let tmpDir: string;
+  let launchPath: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "bc-test-"));
+    launchPath = path.join(tmpDir, ".vscode", "launch.json");
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  const makeConfig = (name: string) =>
+    LaunchJsonService.buildConfig({ containerName: name });
+
+  it("resets configurations to array when it is not an array", async () => {
+    const vsDir = path.join(tmpDir, ".vscode");
+    fs.mkdirSync(vsDir, { recursive: true });
+    fs.writeFileSync(
+      launchPath,
+      '{"version":"0.2.0","configurations":"invalid"}',
+      "utf-8",
+    );
+    await LaunchJsonService.mergeConfig(launchPath, makeConfig("bc1"));
+    const content = JSON.parse(fs.readFileSync(launchPath, "utf-8"));
+    expect(Array.isArray(content.configurations)).toBe(true);
+    expect(content.configurations).toHaveLength(1);
+    expect(content.configurations[0].name).toBe("bc1");
+  });
+
+  it("creates configurations array when key is missing", async () => {
+    const vsDir = path.join(tmpDir, ".vscode");
+    fs.mkdirSync(vsDir, { recursive: true });
+    fs.writeFileSync(launchPath, '{"version":"0.2.0"}', "utf-8");
+    await LaunchJsonService.mergeConfig(launchPath, makeConfig("bc1"));
+    const content = JSON.parse(fs.readFileSync(launchPath, "utf-8"));
+    expect(Array.isArray(content.configurations)).toBe(true);
+    expect(content.configurations).toHaveLength(1);
+    expect(content.configurations[0].name).toBe("bc1");
+  });
+
+  it("handles file with mixed comment styles", async () => {
+    const vsDir = path.join(tmpDir, ".vscode");
+    fs.mkdirSync(vsDir, { recursive: true });
+    const jsonc = [
+      "// top-level line comment",
+      "{",
+      '  "version": "0.2.0", /* inline block comment */',
+      '  "configurations": []',
+      "}",
+    ].join("\n");
+    fs.writeFileSync(launchPath, jsonc, "utf-8");
+    await LaunchJsonService.mergeConfig(launchPath, makeConfig("bc1"));
+    const content = JSON.parse(fs.readFileSync(launchPath, "utf-8"));
+    expect(content.configurations).toHaveLength(1);
+    expect(content.configurations[0].name).toBe("bc1");
+  });
+
+  it("multiple sequential merges keep all configs", async () => {
+    await LaunchJsonService.mergeConfig(launchPath, makeConfig("bc1"));
+    await LaunchJsonService.mergeConfig(launchPath, makeConfig("bc2"));
+    await LaunchJsonService.mergeConfig(launchPath, makeConfig("bc3"));
+    const content = JSON.parse(fs.readFileSync(launchPath, "utf-8"));
+    expect(content.configurations).toHaveLength(3);
+    expect(content.configurations.map((c: { name: string }) => c.name)).toEqual([
+      "bc1",
+      "bc2",
+      "bc3",
+    ]);
+  });
+});
+
+// ─────────── buildConfig — tenant field ──────────────────────────
+
+describe("LaunchJsonService.buildConfig — tenant field", () => {
+  it("tenant is explicitly undefined when not set", () => {
+    const cfg = LaunchJsonService.buildConfig({ containerName: "mybc" });
+    expect(cfg).toHaveProperty("name");
+    expect(cfg.tenant).toBeUndefined();
+    expect("tenant" in cfg).toBe(false);
+  });
+
+  it("has all required fields with correct types", () => {
+    const cfg = LaunchJsonService.buildConfig({ containerName: "mybc" });
+    expect(cfg).toMatchObject({
+      name: expect.any(String),
+      type: "al",
+      request: "launch",
+      environmentType: "OnPrem",
+      server: expect.any(String),
+      serverInstance: expect.any(String),
+      authentication: expect.any(String),
+      port: expect.any(Number),
+      startupObjectId: expect.any(Number),
+      startupObjectType: expect.any(String),
+      breakOnError: expect.any(String),
+      launchBrowser: expect.any(Boolean),
+      enableLongRunningSqlStatements: expect.any(Boolean),
+      enableSqlInformationDebugger: expect.any(Boolean),
+    });
+  });
+});
+
+// ──── buildConfig — container names with special characters ──────
+
+describe("LaunchJsonService.buildConfig — container names with special characters", () => {
+  it("container name with dots produces correct server URL", () => {
+    const cfg = LaunchJsonService.buildConfig({ containerName: "my.bc.server" });
+    expect(cfg.server).toBe("https://my.bc.server");
+    expect(cfg.name).toBe("my.bc.server");
+  });
+
+  it("container name with hyphens works correctly", () => {
+    const cfg = LaunchJsonService.buildConfig({ containerName: "bc-25-us" });
+    expect(cfg.server).toBe("https://bc-25-us");
+    expect(cfg.name).toBe("bc-25-us");
+  });
+
+  it("container name with spaces still produces a config", () => {
+    const cfg = LaunchJsonService.buildConfig({ containerName: "my bc server" });
+    expect(cfg.server).toBe("https://my bc server");
+    expect(cfg.name).toBe("my bc server");
+    expect(cfg.type).toBe("al");
+  });
+});

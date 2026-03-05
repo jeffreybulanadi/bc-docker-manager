@@ -122,3 +122,164 @@ describe("ImageTreeItem", () => {
     expect(md).toContain("2024-01-01 12:00:00");
   });
 });
+
+// ─── ContainerTreeItem — partial BC labels ────────────────────────
+
+describe("ContainerTreeItem — partial BC labels", () => {
+  it("container with nav but no country includes version without country", () => {
+    const item = new ContainerTreeItem(
+      makeContainer({ labels: { nav: "25.0.12345.0" } })
+    );
+
+    expect(item.description).toContain("BC 25.0.12345.0");
+    expect(item.description).not.toMatch(/\| US/i);
+  });
+
+  it("container with country but no nav includes country without version", () => {
+    const item = new ContainerTreeItem(
+      makeContainer({ labels: { country: "us" } })
+    );
+
+    expect(item.description).toContain("US");
+    expect(item.description).not.toContain("BC ");
+  });
+
+  it("container with platform label has platform in tooltip", () => {
+    const item = new ContainerTreeItem(
+      makeContainer({ labels: { nav: "25.0.12345.0", platform: "25.0.12000.0" } })
+    );
+    const md = (item.tooltip as vscode.MarkdownString).value;
+
+    expect(md).toContain("25.0.12000.0");
+  });
+
+  it("container with nav + country + platform has all three in BC section", () => {
+    const item = new ContainerTreeItem(
+      makeContainer({
+        labels: { nav: "25.0.12345.0", country: "us", platform: "25.0.12000.0" },
+      })
+    );
+    const md = (item.tooltip as vscode.MarkdownString).value;
+
+    expect(md).toContain("Business Central");
+    expect(md).toContain("25.0.12345.0");
+    expect(md).toContain("us");
+    expect(md).toContain("25.0.12000.0");
+  });
+});
+
+// ─── ContainerTreeItem — tooltip without BC labels ────────────────
+
+describe("ContainerTreeItem — tooltip without BC labels", () => {
+  it("container with empty labels omits Business Central section", () => {
+    const item = new ContainerTreeItem(makeContainer({ labels: {} }));
+    const md = (item.tooltip as vscode.MarkdownString).value;
+
+    expect(md).not.toContain("Business Central");
+  });
+
+  it("tooltip still contains basic fields when no BC labels", () => {
+    const item = new ContainerTreeItem(makeContainer({ labels: {} }));
+    const md = (item.tooltip as vscode.MarkdownString).value;
+
+    expect(md).toContain("mcr.microsoft.com/businesscentral:ltsc2022");
+    expect(md).toContain("Up 2 hours");
+    expect(md).toContain("0.0.0.0:443->443/tcp");
+    expect(md).toContain("abc123");
+    expect(md).toContain("2024-01-01 12:00:00");
+  });
+});
+
+// ─── ContainerTreeItem — state variations ─────────────────────────
+
+describe("ContainerTreeItem — state variations", () => {
+  it("state 'created' is stoppedContainer context", () => {
+    const item = new ContainerTreeItem(
+      makeContainer({ state: "created", status: "Created" })
+    );
+
+    expect(item.contextValue).toBe("stoppedContainer");
+  });
+
+  it("state 'paused' is stoppedContainer context", () => {
+    const item = new ContainerTreeItem(
+      makeContainer({ state: "paused", status: "Up 2 hours (Paused)" })
+    );
+
+    expect(item.contextValue).toBe("stoppedContainer");
+  });
+
+  it("state 'RUNNING' (uppercase) is runningContainer context", () => {
+    const item = new ContainerTreeItem(
+      makeContainer({ state: "RUNNING" })
+    );
+
+    expect(item.contextValue).toBe("runningContainer");
+  });
+});
+
+// ─── ImageTreeItem — additional checks ────────────────────────────
+
+describe("ImageTreeItem — additional checks", () => {
+  it("contextValue is always 'image'", () => {
+    const item = new ImageTreeItem(makeImage());
+
+    expect(item.contextValue).toBe("image");
+  });
+
+  it("iconPath is a ThemeIcon with id 'package'", () => {
+    const item = new ImageTreeItem(makeImage());
+
+    expect(item.iconPath).toBeInstanceOf(vscode.ThemeIcon);
+    expect((item.iconPath as vscode.ThemeIcon).id).toBe("package");
+  });
+
+  it("image with very long repository name uses full repo:tag as label", () => {
+    const longRepo = "registry.example.com/very/deeply/nested/repository/path/image";
+    const item = new ImageTreeItem(makeImage({ repository: longRepo, tag: "latest" }));
+
+    expect(item.label).toBe(`${longRepo}:latest`);
+  });
+
+  it("image with tag '<none>' but valid repository shows repo:<none>", () => {
+    const item = new ImageTreeItem(
+      makeImage({ repository: "myrepo", tag: "<none>" })
+    );
+
+    expect(item.label).toBe("myrepo:<none>");
+  });
+
+  it("image with empty size has empty description", () => {
+    const item = new ImageTreeItem(makeImage({ size: "" }));
+
+    expect(item.description).toBe("");
+  });
+
+  it("image with empty createdAt renders tooltip without error", () => {
+    const item = new ImageTreeItem(makeImage({ createdAt: "" }));
+
+    expect(item.tooltip).toBeInstanceOf(vscode.MarkdownString);
+    const md = (item.tooltip as vscode.MarkdownString).value;
+    expect(md).toContain("mcr.microsoft.com/businesscentral");
+  });
+});
+
+// ─── ContainerTreeItem — empty/missing ports ──────────────────────
+
+describe("ContainerTreeItem — empty/missing ports", () => {
+  it("container with empty ports shows 'none' in tooltip", () => {
+    const item = new ContainerTreeItem(makeContainer({ ports: "" }));
+    const md = (item.tooltip as vscode.MarkdownString).value;
+
+    expect(md).toContain("none");
+  });
+
+  it("container with actual port mapping shows port string in tooltip", () => {
+    const item = new ContainerTreeItem(
+      makeContainer({ ports: "0.0.0.0:8080->80/tcp" })
+    );
+    const md = (item.tooltip as vscode.MarkdownString).value;
+
+    expect(md).toContain("0.0.0.0:8080->80/tcp");
+  });
+});
