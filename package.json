@@ -63,6 +63,11 @@
           "id": "bcDockerManager-images",
           "name": "Local Images",
           "icon": "$(package)"
+        },
+        {
+          "id": "bcDockerManager-volumes",
+          "name": "Volumes",
+          "icon": "$(database)"
         }
       ]
     },
@@ -82,6 +87,44 @@
         "when": "!bcDockerManager.dockerReady"
       }
     ],
+    "configuration": {
+      "title": "BC Docker Manager",
+      "properties": {
+        "bcDockerManager.defaultMemory": {
+          "type": "string",
+          "default": "8G",
+          "description": "Default memory limit for new containers (e.g. 4G, 8G, 16G)."
+        },
+        "bcDockerManager.defaultIsolation": {
+          "type": "string",
+          "default": "hyperv",
+          "enum": ["hyperv", "process"],
+          "description": "Default isolation mode for new containers."
+        },
+        "bcDockerManager.defaultAuth": {
+          "type": "string",
+          "default": "UserPassword",
+          "enum": ["UserPassword", "NavUserPassword", "Windows"],
+          "description": "Default authentication type for new containers."
+        },
+        "bcDockerManager.defaultCountry": {
+          "type": "string",
+          "default": "us",
+          "description": "Default country/locale for artifact browsing (e.g. us, w1, de, fr)."
+        },
+        "bcDockerManager.defaultDns": {
+          "type": "string",
+          "default": "8.8.8.8",
+          "description": "Default DNS server for containers."
+        },
+        "bcDockerManager.defaultArtifactType": {
+          "type": "string",
+          "default": "sandbox",
+          "enum": ["sandbox", "onprem"],
+          "description": "Default artifact type when browsing."
+        }
+      }
+    },
     "commands": [
       {
         "command": "bcDockerManager.refresh",
@@ -225,6 +268,150 @@
         "title": "Preview launch.json in New Tab",
         "icon": "$(open-preview)",
         "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.copyContainerIp",
+        "title": "Copy Container IP",
+        "icon": "$(copy)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.publishApp",
+        "title": "Publish AL App to Container",
+        "icon": "$(cloud-upload)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.uploadLicense",
+        "title": "Upload License File",
+        "icon": "$(key)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.addUser",
+        "title": "Add BC User",
+        "icon": "$(person-add)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.addTestUsers",
+        "title": "Add Test Users",
+        "icon": "$(organization)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.backupDatabase",
+        "title": "Backup Database",
+        "icon": "$(save)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.restoreDatabase",
+        "title": "Restore Database",
+        "icon": "$(discard)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.installTestToolkit",
+        "title": "Install Test Toolkit",
+        "icon": "$(beaker)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.showStats",
+        "title": "Show Container Stats",
+        "icon": "$(graph)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.editNstSettings",
+        "title": "Edit NST Settings",
+        "icon": "$(settings-gear)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.viewEventLog",
+        "title": "View Event Log",
+        "icon": "$(list-unordered)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.saveProfile",
+        "title": "Save Container Profile",
+        "icon": "$(save-as)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.loadProfile",
+        "title": "Load Container Profile",
+        "icon": "$(folder-opened)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.deleteProfile",
+        "title": "Delete Container Profile",
+        "icon": "$(trash)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.compileApp",
+        "title": "Compile AL App in Container",
+        "icon": "$(tools)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.exportContainer",
+        "title": "Export Container",
+        "icon": "$(export)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.importContainer",
+        "title": "Import Container",
+        "icon": "$(import)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.createVolume",
+        "title": "Create Volume",
+        "icon": "$(add)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.removeVolume",
+        "title": "Remove Volume",
+        "icon": "$(trash)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.inspectVolume",
+        "title": "Inspect Volume",
+        "icon": "$(search)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.refreshVolumes",
+        "title": "Refresh Volumes",
+        "icon": "$(refresh)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.bulkStartContainers",
+        "title": "Start All Stopped Containers",
+        "icon": "$(run-all)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.bulkStopContainers",
+        "title": "Stop All Running Containers",
+        "icon": "$(debug-stop)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.bulkRemoveContainers",
+        "title": "Remove All Stopped Containers",
+        "icon": "$(trash)",
+        "category": "BC Docker Manager"
       }
     ],
     "menus": {
@@ -253,6 +440,41 @@
           "command": "bcDockerManager.openExplorer",
           "when": "view == bcDockerManager-explorer",
           "group": "navigation@1"
+        },
+        {
+          "command": "bcDockerManager.refreshVolumes",
+          "when": "view == bcDockerManager-volumes",
+          "group": "navigation@1"
+        },
+        {
+          "command": "bcDockerManager.createVolume",
+          "when": "view == bcDockerManager-volumes",
+          "group": "navigation@2"
+        },
+        {
+          "command": "bcDockerManager.bulkStopContainers",
+          "when": "view == bcDockerManager-containers",
+          "group": "bulk@1"
+        },
+        {
+          "command": "bcDockerManager.bulkRemoveContainers",
+          "when": "view == bcDockerManager-containers",
+          "group": "bulk@2"
+        },
+        {
+          "command": "bcDockerManager.importContainer",
+          "when": "view == bcDockerManager-containers || view == bcDockerManager-images",
+          "group": "bulk@3"
+        },
+        {
+          "command": "bcDockerManager.saveProfile",
+          "when": "view == bcDockerManager-containers",
+          "group": "bulk@4"
+        },
+        {
+          "command": "bcDockerManager.loadProfile",
+          "when": "view == bcDockerManager-containers",
+          "group": "bulk@5"
         }
       ],
       "view/item/context": [
@@ -375,6 +597,86 @@
           "command": "bcDockerManager.enableWindowsFeatures",
           "when": "view == bcDockerManager-environment && viewItem =~ /health_features_(error|warn)/",
           "group": "inline@1"
+        },
+        {
+          "command": "bcDockerManager.copyContainerIp",
+          "when": "view == bcDockerManager-containers && viewItem == runningContainer",
+          "group": "connect@10"
+        },
+        {
+          "command": "bcDockerManager.publishApp",
+          "when": "view == bcDockerManager-containers && viewItem == runningContainer",
+          "group": "bcops@1"
+        },
+        {
+          "command": "bcDockerManager.uploadLicense",
+          "when": "view == bcDockerManager-containers && viewItem == runningContainer",
+          "group": "bcops@2"
+        },
+        {
+          "command": "bcDockerManager.addUser",
+          "when": "view == bcDockerManager-containers && viewItem == runningContainer",
+          "group": "bcops@3"
+        },
+        {
+          "command": "bcDockerManager.addTestUsers",
+          "when": "view == bcDockerManager-containers && viewItem == runningContainer",
+          "group": "bcops@4"
+        },
+        {
+          "command": "bcDockerManager.backupDatabase",
+          "when": "view == bcDockerManager-containers && viewItem == runningContainer",
+          "group": "bcdata@1"
+        },
+        {
+          "command": "bcDockerManager.restoreDatabase",
+          "when": "view == bcDockerManager-containers && viewItem == runningContainer",
+          "group": "bcdata@2"
+        },
+        {
+          "command": "bcDockerManager.installTestToolkit",
+          "when": "view == bcDockerManager-containers && viewItem == runningContainer",
+          "group": "bcdata@3"
+        },
+        {
+          "command": "bcDockerManager.showStats",
+          "when": "view == bcDockerManager-containers && viewItem == runningContainer",
+          "group": "bcpro@1"
+        },
+        {
+          "command": "bcDockerManager.editNstSettings",
+          "when": "view == bcDockerManager-containers && viewItem == runningContainer",
+          "group": "bcpro@2"
+        },
+        {
+          "command": "bcDockerManager.viewEventLog",
+          "when": "view == bcDockerManager-containers && viewItem == runningContainer",
+          "group": "bcpro@3"
+        },
+        {
+          "command": "bcDockerManager.compileApp",
+          "when": "view == bcDockerManager-containers && viewItem == runningContainer",
+          "group": "bcpro@4"
+        },
+        {
+          "command": "bcDockerManager.exportContainer",
+          "when": "view == bcDockerManager-containers && (viewItem == stoppedContainer || viewItem == runningContainer)",
+          "group": "bcadvanced@1"
+        },
+        {
+          "command": "bcDockerManager.removeVolume",
+          "when": "view == bcDockerManager-volumes && viewItem == volume",
+          "group": "inline@1"
+        },
+        {
+          "command": "bcDockerManager.inspectVolume",
+          "when": "view == bcDockerManager-volumes && viewItem == volume",
+          "group": "volume@1"
+        },
+        {
+          "command": "bcDockerManager.removeVolume",
+          "when": "view == bcDockerManager-volumes && viewItem == volume",
+          "group": "volume@2"
         }
       ]
     }

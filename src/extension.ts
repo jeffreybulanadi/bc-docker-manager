@@ -3,12 +3,15 @@ import { exec } from "child_process";
 import { DockerService } from "./docker/dockerService";
 import { DockerSetup } from "./docker/dockerSetup";
 import { LaunchJsonService } from "./docker/launchJsonService";
+import { BcContainerService } from "./docker/bcContainerService";
 import { BcArtifactsService } from "./registry/bcArtifactsService";
 import { ContainerProvider } from "./tree/containerProvider";
 import { ImageProvider } from "./tree/imageProvider";
 import { DockerHealthProvider } from "./tree/dockerHealthProvider";
+import { VolumeProvider } from "./tree/volumeProvider";
 import { RegistryPanel } from "./webview/registryPanel";
 import { ContainerTreeItem, ImageTreeItem } from "./tree/models";
+import { VolumeTreeItem } from "./tree/volumeProvider";
 
 /**
  * Extension entry point.
@@ -21,11 +24,14 @@ export async function activate(
   context: vscode.ExtensionContext
 ): Promise<void> {
   const docker = new DockerService();
+  const bcService = new BcContainerService(docker);
   const artifacts = new BcArtifactsService();
   artifacts.setStoragePath(context.globalStorageUri.fsPath);
+  bcService.setProfileStoragePath(context.globalStorageUri.fsPath);
   const containerProvider = new ContainerProvider(docker);
   const imageProvider = new ImageProvider(docker);
   const healthProvider = new DockerHealthProvider();
+  const volumeProvider = new VolumeProvider(bcService);
 
   // Preload countries in background so the panel opens instantly.
   // This warms up the TLS connection + populates memory & disk cache.
@@ -43,6 +49,9 @@ export async function activate(
     vscode.window.createTreeView("bcDockerManager-images", {
       treeDataProvider: imageProvider,
     }),
+    vscode.window.createTreeView("bcDockerManager-volumes", {
+      treeDataProvider: volumeProvider,
+    }),
     healthProvider,
   );
 
@@ -51,6 +60,7 @@ export async function activate(
     containerProvider.refresh();
     imageProvider.refresh();
     healthProvider.refresh();
+    volumeProvider.refresh();
   }
 
   // ── Commands ──────────────────────────────────────────────────
@@ -497,6 +507,408 @@ export async function activate(
 
   // Docker health is now handled by the DockerHealthProvider tree view.
   // It auto-polls every 15s and shows live status in the sidebar.
+
+  // ── v1.1: Copy Container IP ──────────────────────────────────
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "bcDockerManager.copyContainerIp",
+      async (item?: ContainerTreeItem) => {
+        const name = item?.container.names ?? await pickRunningContainer(docker);
+        if (!name) { return; }
+        try {
+          await bcService.copyContainerIp(name);
+        } catch (err) {
+          showError("copy IP for", name, err);
+        }
+      },
+    )
+  );
+
+  // ── v1.1: Publish AL App ─────────────────────────────────────
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "bcDockerManager.publishApp",
+      async (item?: ContainerTreeItem) => {
+        const name = item?.container.names ?? await pickRunningContainer(docker);
+        if (!name) { return; }
+        try {
+          await bcService.publishApp(name);
+        } catch (err) {
+          showError("publish app to", name, err);
+        }
+      },
+    )
+  );
+
+  // ── v1.1: Upload License ─────────────────────────────────────
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "bcDockerManager.uploadLicense",
+      async (item?: ContainerTreeItem) => {
+        const name = item?.container.names ?? await pickRunningContainer(docker);
+        if (!name) { return; }
+        try {
+          await bcService.uploadLicense(name);
+        } catch (err) {
+          showError("upload license to", name, err);
+        }
+      },
+    )
+  );
+
+  // ── v1.2: User Management ────────────────────────────────────
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "bcDockerManager.addUser",
+      async (item?: ContainerTreeItem) => {
+        const name = item?.container.names ?? await pickRunningContainer(docker);
+        if (!name) { return; }
+        try {
+          await bcService.addUser(name);
+        } catch (err) {
+          showError("add user to", name, err);
+        }
+      },
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "bcDockerManager.addTestUsers",
+      async (item?: ContainerTreeItem) => {
+        const name = item?.container.names ?? await pickRunningContainer(docker);
+        if (!name) { return; }
+        try {
+          await bcService.addTestUsers(name);
+        } catch (err) {
+          showError("add test users to", name, err);
+        }
+      },
+    )
+  );
+
+  // ── v1.2: Database Backup & Restore ──────────────────────────
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "bcDockerManager.backupDatabase",
+      async (item?: ContainerTreeItem) => {
+        const name = item?.container.names ?? await pickRunningContainer(docker);
+        if (!name) { return; }
+        try {
+          await bcService.backupDatabase(name);
+        } catch (err) {
+          showError("backup database for", name, err);
+        }
+      },
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "bcDockerManager.restoreDatabase",
+      async (item?: ContainerTreeItem) => {
+        const name = item?.container.names ?? await pickRunningContainer(docker);
+        if (!name) { return; }
+        try {
+          await bcService.restoreDatabase(name);
+        } catch (err) {
+          showError("restore database for", name, err);
+        }
+      },
+    )
+  );
+
+  // ── v1.2: Install Test Toolkit ───────────────────────────────
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "bcDockerManager.installTestToolkit",
+      async (item?: ContainerTreeItem) => {
+        const name = item?.container.names ?? await pickRunningContainer(docker);
+        if (!name) { return; }
+        try {
+          await bcService.installTestToolkit(name);
+        } catch (err) {
+          showError("install test toolkit on", name, err);
+        }
+      },
+    )
+  );
+
+  // ── v1.3: Container Resource Monitor ─────────────────────────
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "bcDockerManager.showStats",
+      async (item?: ContainerTreeItem) => {
+        const name = item?.container.names ?? await pickRunningContainer(docker);
+        if (!name) { return; }
+        try {
+          await bcService.showContainerStats(name);
+        } catch (err) {
+          showError("show stats for", name, err);
+        }
+      },
+    )
+  );
+
+  // ── v1.3: Edit NST Settings ──────────────────────────────────
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "bcDockerManager.editNstSettings",
+      async (item?: ContainerTreeItem) => {
+        const name = item?.container.names ?? await pickRunningContainer(docker);
+        if (!name) { return; }
+        try {
+          await bcService.editNstSettings(name);
+        } catch (err) {
+          showError("edit NST settings for", name, err);
+        }
+      },
+    )
+  );
+
+  // ── v1.3: Container Event Log ────────────────────────────────
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "bcDockerManager.viewEventLog",
+      async (item?: ContainerTreeItem) => {
+        const name = item?.container.names ?? await pickRunningContainer(docker);
+        if (!name) { return; }
+        try {
+          await bcService.viewEventLog(name);
+        } catch (err) {
+          showError("view event log for", name, err);
+        }
+      },
+    )
+  );
+
+  // ── v1.3: Container Profiles ─────────────────────────────────
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("bcDockerManager.saveProfile", async () => {
+      try {
+        await bcService.saveProfile();
+      } catch (err) {
+        showError("save", "profile", err);
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("bcDockerManager.loadProfile", async () => {
+      try {
+        await bcService.loadProfile();
+      } catch (err) {
+        showError("load", "profile", err);
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("bcDockerManager.deleteProfile", async () => {
+      try {
+        await bcService.deleteProfile();
+      } catch (err) {
+        showError("delete", "profile", err);
+      }
+    })
+  );
+
+  // ── v1.4: Compile AL App ─────────────────────────────────────
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "bcDockerManager.compileApp",
+      async (item?: ContainerTreeItem) => {
+        const name = item?.container.names ?? await pickRunningContainer(docker);
+        if (!name) { return; }
+        try {
+          await bcService.compileApp(name);
+        } catch (err) {
+          showError("compile app in", name, err);
+        }
+      },
+    )
+  );
+
+  // ── v1.4: Container Export/Import ────────────────────────────
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "bcDockerManager.exportContainer",
+      async (item?: ContainerTreeItem) => {
+        const name = item?.container.names;
+        if (!name) { return; }
+        try {
+          await bcService.exportContainer(name);
+          refreshAll();
+        } catch (err) {
+          showError("export", name, err);
+        }
+      },
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("bcDockerManager.importContainer", async () => {
+      try {
+        await bcService.importContainer();
+        refreshAll();
+      } catch (err) {
+        showError("import", "container", err);
+      }
+    })
+  );
+
+  // ── v1.4: Volume Management ──────────────────────────────────
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("bcDockerManager.refreshVolumes", () => {
+      volumeProvider.refresh();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("bcDockerManager.createVolume", async () => {
+      try {
+        await bcService.createVolume();
+        volumeProvider.refresh();
+      } catch (err) {
+        showError("create", "volume", err);
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "bcDockerManager.removeVolume",
+      async (item?: VolumeTreeItem) => {
+        if (!item) { return; }
+        const answer = await vscode.window.showWarningMessage(
+          `Remove volume "${item.volume.name}"? This cannot be undone.`,
+          { modal: true },
+          "Remove",
+        );
+        if (answer !== "Remove") { return; }
+        try {
+          await bcService.removeVolume(item.volume.name);
+          vscode.window.showInformationMessage(`Volume "${item.volume.name}" removed.`);
+          volumeProvider.refresh();
+        } catch (err) {
+          showError("remove volume", item.volume.name, err);
+        }
+      },
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "bcDockerManager.inspectVolume",
+      async (item?: VolumeTreeItem) => {
+        if (!item) { return; }
+        try {
+          await bcService.inspectVolume(item.volume.name);
+        } catch (err) {
+          showError("inspect volume", item.volume.name, err);
+        }
+      },
+    )
+  );
+
+  // ── v1.4: Bulk Container Operations ──────────────────────────
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("bcDockerManager.bulkStartContainers", async () => {
+      const containers = await docker.getContainers();
+      const stopped = containers.filter((c) => c.state.toLowerCase() !== "running");
+      if (stopped.length === 0) {
+        vscode.window.showInformationMessage("No stopped containers to start.");
+        return;
+      }
+      const confirm = await vscode.window.showInformationMessage(
+        `Start ${stopped.length} stopped container(s)?`,
+        { modal: true },
+        "Start All",
+      );
+      if (confirm !== "Start All") { return; }
+      await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: "Starting containers…" },
+        async (progress) => {
+          for (const c of stopped) {
+            progress.report({ message: c.names });
+            try { await docker.startContainer(c.id); } catch { /* continue */ }
+          }
+        },
+      );
+      refreshAll();
+      vscode.window.showInformationMessage(`${stopped.length} container(s) started.`);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("bcDockerManager.bulkStopContainers", async () => {
+      const containers = await docker.getContainers();
+      const running = containers.filter((c) => c.state.toLowerCase() === "running");
+      if (running.length === 0) {
+        vscode.window.showInformationMessage("No running containers to stop.");
+        return;
+      }
+      const confirm = await vscode.window.showWarningMessage(
+        `Stop ${running.length} running container(s)?`,
+        { modal: true },
+        "Stop All",
+      );
+      if (confirm !== "Stop All") { return; }
+      await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: "Stopping containers…" },
+        async (progress) => {
+          for (const c of running) {
+            progress.report({ message: c.names });
+            try { await docker.stopContainer(c.id); } catch { /* continue */ }
+          }
+        },
+      );
+      refreshAll();
+      vscode.window.showInformationMessage(`${running.length} container(s) stopped.`);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("bcDockerManager.bulkRemoveContainers", async () => {
+      const containers = await docker.getContainers();
+      const stopped = containers.filter((c) => c.state.toLowerCase() !== "running");
+      if (stopped.length === 0) {
+        vscode.window.showInformationMessage("No stopped containers to remove.");
+        return;
+      }
+      const confirm = await vscode.window.showWarningMessage(
+        `Remove ${stopped.length} stopped container(s)? This cannot be undone.`,
+        { modal: true },
+        "Remove All",
+      );
+      if (confirm !== "Remove All") { return; }
+      await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: "Removing containers…" },
+        async (progress) => {
+          for (const c of stopped) {
+            progress.report({ message: c.names });
+            try { await docker.removeContainer(c.id); } catch { /* continue */ }
+          }
+        },
+      );
+      refreshAll();
+      vscode.window.showInformationMessage(`${stopped.length} container(s) removed.`);
+    })
+  );
 }
 
 export function deactivate(): void {
