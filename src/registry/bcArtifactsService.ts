@@ -237,6 +237,39 @@ export class BcArtifactsService {
   }
 
   /**
+   * Get all distinct major version numbers for a type + country.
+   * This is cheap — just parses the first segment of each version string.
+   */
+  async getMajorVersions(
+    type: BcArtifactType,
+    country: string,
+  ): Promise<number[]> {
+    const raw = await this._getRawIndex(type, country);
+    const seen = new Set<number>();
+    for (const entry of raw) {
+      const major = parseInt(entry.Version.split(".")[0], 10);
+      if (!isNaN(major)) { seen.add(major); }
+    }
+    return Array.from(seen).sort((a, b) => b - a);
+  }
+
+  /**
+   * Get versions for a specific major version only.
+   */
+  async getVersionsByMajor(
+    type: BcArtifactType,
+    country: string,
+    major: number,
+  ): Promise<BcArtifactVersion[]> {
+    const raw = await this._getRawIndex(type, country);
+    const filtered = raw.filter((e) => {
+      const m = parseInt(e.Version.split(".")[0], 10);
+      return m === major;
+    });
+    return this._parseVersions(type, country, filtered);
+  }
+
+  /**
    * Get versions grouped by major BC version.
    */
   async getVersionsGroupedByMajor(

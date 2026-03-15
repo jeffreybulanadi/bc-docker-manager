@@ -121,6 +121,14 @@ export class RegistryPanel {
         );
         break;
 
+      case "loadMajor":
+        await this._handleLoadMajor(
+          msg.type as BcArtifactType,
+          msg.country as string,
+          msg.major as number,
+        );
+        break;
+
       case "copyUrl":
         await vscode.env.clipboard.writeText(msg.url as string);
         vscode.window.showInformationMessage(`Copied: ${msg.url}`);
@@ -304,6 +312,10 @@ export class RegistryPanel {
     const key = `${type}/${country}`;
 
     try {
+      // Always send available major versions upfront (cheap operation)
+      const majors = await this._artifacts.getMajorVersions(type, country);
+      this._post({ command: "majorVersions", majors });
+
       if (this._fullyCached.has(key)) {
         const all = this._cache.get(key)!;
         const initial = all.slice(0, RegistryPanel.PAGE_SIZE);
@@ -340,6 +352,31 @@ export class RegistryPanel {
           this._post({ command: "fullDataReady", type, country, totalCount: all.length });
         }).catch(() => { /* best effort */ });
       }
+    } catch (err) {
+      this._post({
+        command: "error",
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  /**
+   * Load all versions for a specific major version.
+   * Called when the user selects a major from the dropdown.
+   */
+  private async _handleLoadMajor(
+    type: BcArtifactType,
+    country: string,
+    major: number,
+  ): Promise<void> {
+    try {
+      const versions = await this._artifacts.getVersionsByMajor(type, country, major);
+      this._post({
+        command: "majorVersions_data",
+        type, country, major,
+        versions: versions.map(serializeVersion),
+        totalCount: versions.length,
+      });
     } catch (err) {
       this._post({
         command: "error",

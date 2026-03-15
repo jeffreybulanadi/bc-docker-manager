@@ -25,6 +25,7 @@
   let allCountries   = [];
   let sortCol        = "major";
   let sortAsc        = false;
+  let majorServerFiltered = false; // true when viewing a specific major from server
 
   /* -- Elements ------------------------------------------------ */
   const searchInput   = document.getElementById("searchInput");
@@ -76,7 +77,30 @@
 
   /* -- Search / filter ----------------------------------------- */
   searchInput.addEventListener("input", renderTable);
-  majorSelect.addEventListener("change", renderTable);
+  majorSelect.addEventListener("change", function () {
+    var val = majorSelect.value;
+    if (val === "all") {
+      // Reset to normal paginated view — reload the country
+      majorServerFiltered = false;
+      resetState();
+      showLoading();
+      vscode.postMessage({
+        command: "loadCountry",
+        type: currentType,
+        country: currentCountry,
+      });
+    } else {
+      // Ask backend to load all versions for this major
+      majorServerFiltered = true;
+      showLoading();
+      vscode.postMessage({
+        command: "loadMajor",
+        type: currentType,
+        country: currentCountry,
+        major: parseInt(val, 10),
+      });
+    }
+  });
 
   /* -- Infinite scroll ----------------------------------------- */
   tableWrapper.addEventListener("scroll", function () {
@@ -150,6 +174,21 @@
         renderTable();
         break;
 
+      case "majorVersions":
+        populateMajorDropdownFromList(msg.majors);
+        break;
+
+      case "majorVersions_data":
+        // Replace loaded versions with the major-filtered set
+        loadedVersions = msg.versions;
+        totalCount     = msg.totalCount;
+        currentOffset  = msg.totalCount;
+        hasMore        = false;
+        loadingMore    = false;
+        showTable();
+        renderTable();
+        break;
+
       case "error":
         showError(msg.message);
         break;
@@ -164,6 +203,7 @@
     currentOffset  = 0;
     hasMore        = false;
     loadingMore    = false;
+    majorServerFiltered = false;
     searchInput.value = "";
   }
 
@@ -172,7 +212,8 @@
     var majorFilter = majorSelect.value;
 
     var filtered = loadedVersions.filter(function (v) {
-      if (majorFilter !== "all" && String(v.major) !== majorFilter) { return false; }
+      // Skip client-side major filter when data is already server-filtered
+      if (!majorServerFiltered && majorFilter !== "all" && String(v.major) !== majorFilter) { return false; }
       if (search) {
         var hay = (v.version + " " + v.country + " " + v.major).toLowerCase();
         if (!hay.includes(search)) { return false; }
@@ -274,6 +315,22 @@
     majors.sort(function (a, b) { return b - a; });
 
     majorSelect.innerHTML = '<option value="all">All</option>';
+    majors.forEach(function (m) {
+      var o = document.createElement("option");
+      o.value = String(m);
+      o.textContent = "BC " + m;
+      majorSelect.appendChild(o);
+    });
+    var options = majorSelect.querySelectorAll("option");
+    for (var i = 0; i < options.length; i++) {
+      if (options[i].value === prev) { majorSelect.value = prev; break; }
+    }
+  }
+
+  /** Populate from server-provided list of ALL available major versions. */
+  function populateMajorDropdownFromList(majors) {
+    var prev = majorSelect.value;
+    majorSelect.innerHTML = '<option value="all">All (latest)</option>';
     majors.forEach(function (m) {
       var o = document.createElement("option");
       o.value = String(m);
