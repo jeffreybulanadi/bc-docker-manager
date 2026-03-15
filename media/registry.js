@@ -153,7 +153,6 @@
         if (countrySelect.value !== msg.country) {
           countrySelect.value = msg.country;
         }
-        populateMajorDropdown();
         showTable();
         renderTable();
         break;
@@ -164,7 +163,6 @@
         currentOffset  = msg.offset;
         hasMore        = msg.hasMore;
         loadingMore    = false;
-        populateMajorDropdown();
         renderTable();
         break;
 
