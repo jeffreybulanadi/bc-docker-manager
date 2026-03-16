@@ -76,7 +76,11 @@
   });
 
   /* -- Search / filter ----------------------------------------- */
-  searchInput.addEventListener("input", renderTable);
+  var _searchTimer;
+  searchInput.addEventListener("input", function () {
+    clearTimeout(_searchTimer);
+    _searchTimer = setTimeout(renderTable, 250);
+  });
   majorSelect.addEventListener("change", function () {
     var val = majorSelect.value;
     if (val === "all") {

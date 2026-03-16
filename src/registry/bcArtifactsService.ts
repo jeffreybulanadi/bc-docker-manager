@@ -60,6 +60,9 @@ export class BcArtifactsService {
   /** In-memory cache of raw CDN JSON (type/country → entries). */
   private _memCache = new Map<string, { Version: string; CreationTime: string }[]>();
 
+  /** Cache of parsed+sorted versions to avoid re-parsing on every call. */
+  private _parsedCache = new Map<string, BcArtifactVersion[]>();
+
   /** Disk-cache directory (set via setStoragePath). */
   private _diskCacheDir: string | undefined;
 
@@ -86,26 +89,40 @@ export class BcArtifactsService {
    */
   private async _fetch(urlPath: string): Promise<string> {
     const url = `${CDN_BASE}${urlPath}`;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    let lastErr: Error | undefined;
 
-    try {
-      const res = await fetch(url, {
-        signal: controller.signal,
-        headers: { "User-Agent": "BCDockerManager-VSCode/1.0" },
-      });
-      if (!res.ok) {
-        throw new Error(`CDN returned HTTP ${res.status} ${res.statusText} for ${urlPath}`);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) {
+        // Exponential backoff: 500ms, 1500ms
+        await new Promise((r) => setTimeout(r, 500 * Math.pow(3, attempt - 1)));
       }
-      return await res.text();
-    } catch (err: unknown) {
-      if (err instanceof Error && err.name === "AbortError") {
-        throw new Error(`BC artifacts CDN request timed out (${REQUEST_TIMEOUT_MS}ms)`);
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+      try {
+        const res = await fetch(url, {
+          signal: controller.signal,
+          headers: { "User-Agent": "BCDockerManager-VSCode/1.0" },
+        });
+        if (!res.ok) {
+          throw new Error(`CDN returned HTTP ${res.status} ${res.statusText} for ${urlPath}`);
+        }
+        return await res.text();
+      } catch (err: unknown) {
+        clearTimeout(timer);
+        if (err instanceof Error && err.name === "AbortError") {
+          lastErr = new Error(`BC artifacts CDN request timed out (${REQUEST_TIMEOUT_MS}ms)`);
+        } else {
+          lastErr = err instanceof Error ? err : new Error(String(err));
+        }
+        // Retry on network errors and timeouts; don't retry 4xx client errors
+        if (err instanceof Error && "status" in err) { throw err; }
+      } finally {
+        clearTimeout(timer);
       }
-      throw err;
-    } finally {
-      clearTimeout(timer);
     }
+    throw lastErr ?? new Error(`CDN fetch failed after 3 attempts: ${urlPath}`);
   }
 
   // ── Disk cache ──────────────────────────────────────────────
@@ -165,7 +182,14 @@ export class BcArtifactsService {
    * Returns versions sorted newest-first.
    */
   async getVersions(type: BcArtifactType, country: string): Promise<BcArtifactVersion[]> {
-    return this._parseVersions(type, country, await this._getRawIndex(type, country));
+    const cacheKey = `parsed:${type}/${country}`;
+    const cached = this._parsedCache.get(cacheKey);
+    if (cached) { return cached; }
+
+    const raw = await this._getRawIndex(type, country);
+    const versions = this._parseVersions(type, country, raw);
+    this._parsedCache.set(cacheKey, versions);
+    return versions;
   }
 
   /**
@@ -328,5 +352,6 @@ export class BcArtifactsService {
 
   dispose(): void {
     this._memCache.clear();
+    this._parsedCache.clear();
   }
 }

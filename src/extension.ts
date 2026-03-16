@@ -56,11 +56,17 @@ export async function activate(
   );
 
   // ── Helper ────────────────────────────────────────────────────
+  let _refreshTimer: ReturnType<typeof setTimeout> | undefined;
   function refreshAll(): void {
-    containerProvider.refresh();
-    imageProvider.refresh();
-    healthProvider.refresh();
-    volumeProvider.refresh();
+    // Debounce rapid calls (e.g. bulk operations triggering multiple refreshes)
+    if (_refreshTimer) { clearTimeout(_refreshTimer); }
+    _refreshTimer = setTimeout(() => {
+      _refreshTimer = undefined;
+      containerProvider.refresh();
+      imageProvider.refresh();
+      healthProvider.refresh();
+      volumeProvider.refresh();
+    }, 300);
   }
 
   // ── Commands ──────────────────────────────────────────────────

@@ -97,21 +97,21 @@ export class BcContainerService {
     await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: `Publishing ${fileName}…` },
       async (progress) => {
-        // Step 1: Ensure temp directory exists
-        progress.report({ message: "Preparing container…" });
-        await this.execInContainer(
-          containerName,
-          `if (!(Test-Path '${CONTAINER_TEMP}')) { New-Item -Path '${CONTAINER_TEMP}' -ItemType Directory -Force | Out-Null }`,
-        );
+        // Step 1: Prepare container + fetch metadata in parallel
+        progress.report({ message: "Preparing…" });
+        const [serverInstance] = await Promise.all([
+          this.getServerInstance(containerName),
+          this.execInContainer(
+            containerName,
+            `if (!(Test-Path '${CONTAINER_TEMP}')) { New-Item -Path '${CONTAINER_TEMP}' -ItemType Directory -Force | Out-Null }`,
+          ),
+        ]);
 
         // Step 2: Copy .app file into container
         progress.report({ message: "Copying app to container…" });
         await this.copyToContainer(containerName, hostPath, containerPath);
 
-        // Step 3: Get server instance name
-        const serverInstance = await this.getServerInstance(containerName);
-
-        // Step 4: Publish the app
+        // Step 3: Publish the app
         progress.report({ message: "Publishing app…" });
         const publishCmd = [
           `Publish-NAVApp`,
@@ -121,7 +121,7 @@ export class BcContainerService {
         ].join(" ");
         await this.execInContainer(containerName, publishCmd, 300_000);
 
-        // Step 5: Sync and install
+        // Step 4: Sync and install
         progress.report({ message: "Syncing & installing…" });
         const appInfo = await this.execInContainer(
           containerName,
@@ -325,10 +325,7 @@ export class BcContainerService {
       { location: vscode.ProgressLocation.Notification, title: "Backing up database…" },
       async (progress) => {
         progress.report({ message: "Creating backup inside container…" });
-        const serverInstance = await this.getServerInstance(containerName);
-
-        // Get database name from server instance
-        const dbName = await this.getDatabaseName(containerName, serverInstance);
+        const { serverInstance, dbName } = await this.getContainerInfo(containerName);
 
         await this.execInContainer(
           containerName,
@@ -376,14 +373,16 @@ export class BcContainerService {
     await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: "Restoring database…" },
       async (progress) => {
-        const serverInstance = await this.getServerInstance(containerName);
-        const dbName = await this.getDatabaseName(containerName, serverInstance);
+        // Fetch container metadata + prepare temp dir in parallel
+        const [{ serverInstance, dbName }] = await Promise.all([
+          this.getContainerInfo(containerName),
+          this.execInContainer(
+            containerName,
+            `New-Item -Path 'C:\\temp' -ItemType Directory -Force -ErrorAction SilentlyContinue | Out-Null`,
+          ),
+        ]);
 
         progress.report({ message: "Copying backup to container…" });
-        await this.execInContainer(
-          containerName,
-          `New-Item -Path 'C:\\temp' -ItemType Directory -Force -ErrorAction SilentlyContinue | Out-Null`,
-        );
         await this.copyToContainer(containerName, hostPath, containerBakPath);
 
         progress.report({ message: "Stopping service tier…" });
@@ -936,36 +935,55 @@ export class BcContainerService {
 
   // ── Helpers ──────────────────────────────────────────────────
 
-  /** Discover the BC server instance name inside a container. */
-  private async getServerInstance(containerName: string): Promise<string> {
+  /** In-memory cache for container metadata to avoid repeated docker exec calls. */
+  private _containerInfoCache = new Map<string, { serverInstance: string; dbName: string; ts: number }>();
+  private static readonly INFO_CACHE_TTL = 60_000; // 1 minute
+
+  /**
+   * Get BC server instance name AND database name in a single docker exec call.
+   * Results are cached for 1 minute to avoid repeated round-trips.
+   */
+  private async getContainerInfo(containerName: string): Promise<{ serverInstance: string; dbName: string }> {
+    const cached = this._containerInfoCache.get(containerName);
+    if (cached && Date.now() - cached.ts < BcContainerService.INFO_CACHE_TTL) {
+      return { serverInstance: cached.serverInstance, dbName: cached.dbName };
+    }
+
     try {
       const raw = await this.execInContainer(
         containerName,
-        `(Get-NAVServerInstance | Select-Object -First 1).ServerInstance -replace '.*\\$', ''`,
+        [
+          `$si = (Get-NAVServerInstance | Select-Object -First 1).ServerInstance -replace '.*\\\\$', '';`,
+          `if (!$si) { $si = '${BC_SERVER_INSTANCE}' };`,
+          `$db = (Get-NAVServerConfiguration -ServerInstance $si -ErrorAction SilentlyContinue | Where-Object { $_.KeyName -eq 'DatabaseName' }).Value;`,
+          `if (!$db) { $db = 'CRONUS' };`,
+          `ConvertTo-Json @{ ServerInstance = $si; DatabaseName = $db }`,
+        ].join(" "),
         15_000,
       );
-      const instance = raw.trim();
-      return instance || BC_SERVER_INSTANCE;
+      const info = JSON.parse(raw.trim());
+      const result = {
+        serverInstance: info.ServerInstance || BC_SERVER_INSTANCE,
+        dbName: info.DatabaseName || "CRONUS",
+      };
+      this._containerInfoCache.set(containerName, { ...result, ts: Date.now() });
+      return result;
     } catch {
-      return BC_SERVER_INSTANCE;
+      return { serverInstance: BC_SERVER_INSTANCE, dbName: "CRONUS" };
     }
   }
 
-  /** Get the BC database name from the server instance configuration. */
+  /** Shorthand — get just the server instance name. */
+  private async getServerInstance(containerName: string): Promise<string> {
+    return (await this.getContainerInfo(containerName)).serverInstance;
+  }
+
+  /** Shorthand — get just the database name. */
   private async getDatabaseName(
     containerName: string,
-    serverInstance: string,
+    _serverInstance?: string,
   ): Promise<string> {
-    try {
-      const raw = await this.execInContainer(
-        containerName,
-        `(Get-NAVServerConfiguration -ServerInstance '${serverInstance}' | Where-Object { $_.KeyName -eq 'DatabaseName' }).Value`,
-        15_000,
-      );
-      return raw.trim() || "CRONUS";
-    } catch {
-      return "CRONUS";
-    }
+    return (await this.getContainerInfo(containerName)).dbName;
   }
 }
 

@@ -131,20 +131,16 @@ export class DockerService {
    *     anywhere in the name, or "bc" as a delimited segment).
    */
   async getBcContainers(): Promise<DockerContainer[]> {
-    // Primary: Docker label filter
+    // Single docker ps call with Labels included for client-side filtering
     const raw = await this.exec(
-      'docker ps -a --no-trunc --filter "label=nav" --format "{{json .}}"'
+      'docker ps -a --no-trunc --format "{{json .}}"'
     );
-    let containers = this.parseLines(raw);
+    const all = this.parseLinesWithLabelsHint(raw);
 
-    // Fallback: image name heuristic when no labelled containers found
+    // Prefer label-filtered containers; fall back to image name heuristic
+    let containers = all.filter((c) => c._hasNavLabel);
     if (containers.length === 0) {
-      const all = await this.exec(
-        'docker ps -a --no-trunc --format "{{json .}}"'
-      );
-      containers = this.parseLines(all).filter(
-        (c) => this.looksLikeBcImage(c.image)
-      );
+      containers = all.filter((c) => this.looksLikeBcImage(c.image));
     }
 
     if (containers.length > 0) {
@@ -289,17 +285,36 @@ export class DockerService {
       });
   }
 
+  /** Like parseLines but also extracts the raw Labels string for filtering. */
+  private parseLinesWithLabelsHint(raw: string): (DockerContainer & { _hasNavLabel: boolean })[] {
+    return raw
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => {
+        const obj = JSON.parse(line) as Record<string, string>;
+        const labelsRaw = obj["Labels"] ?? "";
+        return {
+          id: obj["ID"] ?? "",
+          names: obj["Names"] ?? "",
+          image: obj["Image"] ?? "",
+          status: obj["Status"] ?? "",
+          state: obj["State"] ?? "",
+          ports: obj["Ports"] ?? "",
+          createdAt: obj["CreatedAt"] ?? "",
+          labels: {},
+          _hasNavLabel: labelsRaw.includes("nav="),
+        };
+      });
+  }
+
+  /** Pre-compiled regex for BC image detection. */
+  private static readonly BC_IMAGE_REGEX = /(?:^|[\/:\-_])bc(?:[\/:\-_\d]|$)/;
+
   /** Heuristic: does the image name look BC-related? */
   private looksLikeBcImage(name: string): boolean {
     const lower = name.toLowerCase();
-    if (lower.includes("businesscentral")) {
-      return true;
-    }
-    // "bc" as a delimited segment: /bc:, -bc-, _bc_, bc25us, etc.
-    if (/(?:^|[\/:\-_])bc(?:[\/:\-_\d]|$)/.test(lower)) {
-      return true;
-    }
-    return false;
+    return lower.includes("businesscentral") || DockerService.BC_IMAGE_REGEX.test(lower);
   }
 
   // ── BC container creation (native docker run) ────────────────

@@ -88,13 +88,19 @@ export class DockerHealthProvider
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private _checks: HealthCheck[] = [];
-  private _timer: ReturnType<typeof setInterval> | undefined;
+  private _timer: ReturnType<typeof setTimeout> | undefined;
   private _disposed = false;
   private _allOk = false;
+  private _stableCount = 0;
+
+  /** Polling interval: starts at 15s, backs off to 60s when stable. */
+  private static readonly POLL_FAST_MS = 15_000;
+  private static readonly POLL_SLOW_MS = 60_000;
+  private static readonly STABLE_THRESHOLD = 3; // consecutive healthy checks before slowing
 
   constructor() {
     this._runChecks();
-    this._timer = setInterval(() => this._runChecks(), 15_000);
+    this._scheduleNext();
   }
 
   get isAllHealthy(): boolean { return this._allOk; }
@@ -106,11 +112,15 @@ export class DockerHealthProvider
     return this._checks.map((c) => new HealthCheckItem(c));
   }
 
-  refresh(): void { this._runChecks(); }
+  refresh(): void {
+    this._stableCount = 0; // Force fast polling on manual refresh
+    this._runChecks();
+    this._scheduleNext();
+  }
 
   dispose(): void {
     this._disposed = true;
-    if (this._timer) { clearInterval(this._timer); this._timer = undefined; }
+    if (this._timer) { clearTimeout(this._timer); this._timer = undefined; }
   }
 
   // ── Core check logic ────────────────────────────────────────
@@ -131,12 +141,30 @@ export class DockerHealthProvider
     this._checks = checks;
     this._allOk = checks.every((c) => c.status === "ok");
 
+    // Track consecutive healthy checks for backoff
+    if (this._allOk) {
+      this._stableCount = Math.min(this._stableCount + 1, DockerHealthProvider.STABLE_THRESHOLD + 1);
+    } else {
+      this._stableCount = 0;
+    }
+
     const byId = new Map(checks.map((c) => [c.id, c.status]));
     vscode.commands.executeCommand("setContext", "bcDockerManager.dockerReady", this._allOk);
     vscode.commands.executeCommand("setContext", "bcDockerManager.featuresOk", byId.get("features") === "ok");
     vscode.commands.executeCommand("setContext", "bcDockerManager.dockerOk", byId.get("docker") === "ok");
 
     this._onDidChangeTreeData.fire();
+    this._scheduleNext();
+  }
+
+  /** Schedule next health check with exponential backoff when stable. */
+  private _scheduleNext(): void {
+    if (this._disposed) { return; }
+    if (this._timer) { clearTimeout(this._timer); }
+    const interval = this._stableCount >= DockerHealthProvider.STABLE_THRESHOLD
+      ? DockerHealthProvider.POLL_SLOW_MS
+      : DockerHealthProvider.POLL_FAST_MS;
+    this._timer = setTimeout(() => this._runChecks(), interval);
   }
 
   // ── Individual checks ───────────────────────────────────────
