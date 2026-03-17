@@ -698,9 +698,12 @@
     "package": "vsce package",
     "test": "jest",
     "pretest:e2e": "npm run compile",
-    "test:e2e": "tsc -p e2e/tsconfig.json && node out/e2e/runTests.js"
+    "test:e2e": "tsc -p e2e/tsconfig.json && node out/e2e/runTests.js",
+    "pretest:ui": "npm run compile && tsc -p ui-tests/tsconfig.json",
+    "test:ui": "node out/ui-tests/runTests.js"
   },
   "devDependencies": {
+    "@types/chai": "^5.2.3",
     "@types/jest": "^29.5.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "^20.11.0",
@@ -708,10 +711,12 @@
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^2.22.0",
+    "chai": "^6.2.2",
     "glob": "^13.0.6",
     "jest": "^29.7.0",
     "mocha": "^11.7.5",
     "ts-jest": "^29.1.0",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "vscode-extension-tester": "^8.23.0"
   }
 }

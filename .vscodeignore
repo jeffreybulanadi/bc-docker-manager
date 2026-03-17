@@ -11,3 +11,12 @@ package-lock.json
 **/*.ts
 !out/**
 tmpclaude-*
+.extester/**
+.vscode-test/**
+e2e/**
+ui-tests/**
+out/e2e/**
+out/ui-tests/**
+jest.config.js
+**/*.test.js
+**/*.test.ts
