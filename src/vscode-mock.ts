@@ -13,8 +13,30 @@ const window = {
   showInputBox: jest.fn().mockResolvedValue(undefined),
   showQuickPick: jest.fn().mockResolvedValue(undefined),
   showOpenDialog: jest.fn().mockResolvedValue(undefined),
+  showSaveDialog: jest.fn().mockResolvedValue(undefined),
   showTextDocument: jest.fn().mockResolvedValue(undefined),
+  showWorkspaceFolderPick: jest.fn().mockResolvedValue(undefined),
   createTerminal: jest.fn().mockReturnValue({ show: jest.fn() }),
+  createOutputChannel: jest.fn().mockReturnValue({
+    appendLine: jest.fn(),
+    append: jest.fn(),
+    show: jest.fn(),
+    clear: jest.fn(),
+    dispose: jest.fn(),
+  }),
+  createWebviewPanel: jest.fn().mockReturnValue({
+    webview: {
+      html: "",
+      onDidReceiveMessage: jest.fn(),
+      postMessage: jest.fn().mockResolvedValue(true),
+      asWebviewUri: jest.fn((uri: any) => uri),
+      cspSource: "https://test.csp",
+    },
+    onDidDispose: jest.fn(),
+    reveal: jest.fn(),
+    dispose: jest.fn(),
+    visible: true,
+  }),
   withProgress: jest.fn().mockImplementation((_opts: any, task: (p: any) => Promise<any>) =>
     task({ report: jest.fn() })
   ),
@@ -23,6 +45,10 @@ const window = {
 const workspace = {
   workspaceFolders: undefined as any,
   openTextDocument: jest.fn().mockResolvedValue({}),
+  getConfiguration: jest.fn().mockReturnValue({
+    get: jest.fn().mockReturnValue(undefined),
+    update: jest.fn().mockResolvedValue(undefined),
+  }),
 };
 
 const env = {
@@ -36,9 +62,15 @@ const commands = {
 };
 
 const Uri = {
-  parse: jest.fn((s: string) => ({ toString: () => s })),
+  parse: jest.fn((s: string) => ({ toString: () => s, fsPath: s, scheme: "file" })),
+  file: jest.fn((p: string) => ({ toString: () => `file:///${p}`, fsPath: p, scheme: "file" })),
+  joinPath: jest.fn((base: any, ...segments: string[]) => {
+    const joined = [base.fsPath || base.toString(), ...segments].join("/");
+    return { toString: () => joined, fsPath: joined, scheme: "file" };
+  }),
 };
 
+const ViewColumn = { One: 1, Two: 2, Three: 3, Active: -1, Beside: -2 };
 const ProgressLocation = { Notification: 15 };
 const TreeItemCollapsibleState = { None: 0, Collapsed: 1, Expanded: 2 };
 
@@ -68,6 +100,6 @@ class EventEmitter {
 
 module.exports = {
   window, workspace, env, commands, Uri,
-  ProgressLocation, TreeItemCollapsibleState,
+  ViewColumn, ProgressLocation, TreeItemCollapsibleState,
   TreeItem, ThemeIcon, ThemeColor, MarkdownString, EventEmitter,
 };
