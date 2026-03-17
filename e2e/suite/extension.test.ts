@@ -1,8 +1,8 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
 
-suite("Extension E2E Tests", () => {
-  suiteSetup(async () => {
+describe("Extension E2E Tests", () => {
+  before(async () => {
     const ext = vscode.extensions.getExtension("jeffreybulanadi.bc-docker-manager");
     if (ext && !ext.isActive) {
       await ext.activate();
@@ -10,12 +10,12 @@ suite("Extension E2E Tests", () => {
     await new Promise((r) => setTimeout(r, 2000));
   });
 
-  test("Extension should be present", () => {
+  it("Extension should be present", () => {
     const ext = vscode.extensions.getExtension("jeffreybulanadi.bc-docker-manager");
     assert.ok(ext, "Extension not found");
   });
 
-  test("Extension should activate", async () => {
+  it("Extension should activate", async () => {
     const ext = vscode.extensions.getExtension("jeffreybulanadi.bc-docker-manager");
     assert.ok(ext);
     if (!ext.isActive) {
@@ -24,21 +24,33 @@ suite("Extension E2E Tests", () => {
     assert.ok(ext.isActive, "Extension failed to activate");
   });
 
-  test("All core commands should be registered", async () => {
+  it("All core commands should be registered", async () => {
     const allCommands = await vscode.commands.getCommands(true);
     const expectedCommands = [
       "bcDockerManager.refresh",
       "bcDockerManager.refreshRegistry",
-      "bcDockerManager.openArtifacts",
+      "bcDockerManager.openExplorer",
       "bcDockerManager.startContainer",
       "bcDockerManager.stopContainer",
       "bcDockerManager.restartContainer",
       "bcDockerManager.removeContainer",
-      "bcDockerManager.containerLogs",
-      "bcDockerManager.containerTerminal",
-      "bcDockerManager.inspectContainer",
       "bcDockerManager.removeImage",
       "bcDockerManager.toggleBcFilter",
+      "bcDockerManager.testCdn",
+      "bcDockerManager.startDockerEngine",
+      "bcDockerManager.enableWindowsFeatures",
+      "bcDockerManager.setupAll",
+      "bcDockerManager.installDockerEngine",
+      "bcDockerManager.refreshEnvironment",
+      "bcDockerManager.generateLaunchJson",
+      "bcDockerManager.openWebClient",
+      "bcDockerManager.openTerminal",
+      "bcDockerManager.viewLogs",
+      "bcDockerManager.updateHosts",
+      "bcDockerManager.installCert",
+      "bcDockerManager.setupNetworking",
+      "bcDockerManager.copyLaunchJson",
+      "bcDockerManager.previewLaunchJson",
       "bcDockerManager.copyContainerIp",
       "bcDockerManager.publishApp",
       "bcDockerManager.uploadLicense",
@@ -47,7 +59,7 @@ suite("Extension E2E Tests", () => {
       "bcDockerManager.backupDatabase",
       "bcDockerManager.restoreDatabase",
       "bcDockerManager.installTestToolkit",
-      "bcDockerManager.containerStats",
+      "bcDockerManager.showStats",
       "bcDockerManager.editNstSettings",
       "bcDockerManager.viewEventLog",
       "bcDockerManager.saveProfile",
@@ -60,6 +72,9 @@ suite("Extension E2E Tests", () => {
       "bcDockerManager.removeVolume",
       "bcDockerManager.inspectVolume",
       "bcDockerManager.refreshVolumes",
+      "bcDockerManager.bulkStartContainers",
+      "bcDockerManager.bulkStopContainers",
+      "bcDockerManager.bulkRemoveContainers",
     ];
 
     for (const cmd of expectedCommands) {
@@ -70,9 +85,9 @@ suite("Extension E2E Tests", () => {
     }
   });
 
-  test("Artifacts Explorer command should execute without error", async () => {
+  it("Artifacts Explorer command should execute without error", async () => {
     try {
-      await vscode.commands.executeCommand("bcDockerManager.openArtifacts");
+      await vscode.commands.executeCommand("bcDockerManager.openExplorer");
       assert.ok(true);
     } catch (err: any) {
       assert.ok(true, `Command executed but may have shown error: ${err.message}`);
