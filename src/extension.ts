@@ -33,7 +33,7 @@ export async function activate(
   const imageProvider = new ImageProvider(docker);
   const healthProvider = new DockerHealthProvider();
   const volumeProvider = new VolumeProvider(bcService);
-  const artifactsProvider = new ArtifactsProvider(artifacts);
+  const artifactsProvider = new ArtifactsProvider();
 
   // Preload countries in background so the panel opens instantly.
   // This warms up the TLS connection + populates memory & disk cache.
