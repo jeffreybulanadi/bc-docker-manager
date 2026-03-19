@@ -1,34 +1,87 @@
 /* ================================================================
- * BC Artifacts Explorer — Webview Styles
- * Uses VS Code CSS custom properties for full theme integration.
+ * BC Artifacts Explorer — Fluent 2 Design System
+ *
+ * Follows Microsoft Fluent 2 design tokens & principles:
+ *  · 4 px spacing grid  (4, 8, 12, 16, 20, 24, 32, 40, 48)
+ *  · Corner radii       (4 small, 8 medium, 12 large)
+ *  · Elevation / depth  (subtle box-shadows on layered surfaces)
+ *  · Motion             (200 ms ease for interactions)
+ *  · Typography         (Segoe UI Variable / system stack)
+ *
+ * All colours use VS Code CSS custom properties so the panel
+ * adapts to every built-in and 3rd-party theme automatically.
  * ================================================================ */
 
+/* ── Design tokens ──────────────────────────────────────────── */
 :root {
-  --bg: var(--vscode-editor-background);
-  --fg: var(--vscode-editor-foreground);
-  --border: var(--vscode-panel-border, var(--vscode-editorGroup-border, #444));
-  --header-bg: var(--vscode-editorGroupHeader-tabsBackground, #252526);
-  --hover-bg: var(--vscode-list-hoverBackground, #2a2d2e);
-  --input-bg: var(--vscode-input-background, #3c3c3c);
+  /* surfaces */
+  --bg:          var(--vscode-editor-background);
+  --fg:          var(--vscode-editor-foreground);
+  --surface:     var(--vscode-sideBar-background, var(--bg));
+  --card:        var(--vscode-editorWidget-background, var(--surface));
+  --border:      var(--vscode-panel-border, var(--vscode-editorGroup-border, #444));
+  --border-subtle: var(--vscode-widget-border, rgba(128, 128, 128, 0.15));
+  --header-bg:   var(--vscode-editorGroupHeader-tabsBackground, #252526);
+  --hover-bg:    var(--vscode-list-hoverBackground, #2a2d2e);
+  --active-bg:   var(--vscode-list-activeSelectionBackground, #094771);
+
+  /* inputs */
+  --input-bg:     var(--vscode-input-background, #3c3c3c);
   --input-border: var(--vscode-input-border, #3c3c3c);
-  --input-fg: var(--vscode-input-foreground, #ccc);
-  --button-bg: var(--vscode-button-background, #0e639c);
-  --button-fg: var(--vscode-button-foreground, #fff);
-  --button-hover: var(--vscode-button-hoverBackground, #1177bb);
-  --button-secondary-bg: var(--vscode-button-secondaryBackground, #3a3d41);
-  --button-secondary-fg: var(--vscode-button-secondaryForeground, #fff);
+  --input-fg:     var(--vscode-input-foreground, #ccc);
+
+  /* buttons */
+  --button-bg:             var(--vscode-button-background, #0e639c);
+  --button-fg:             var(--vscode-button-foreground, #fff);
+  --button-hover:          var(--vscode-button-hoverBackground, #1177bb);
+  --button-secondary-bg:   var(--vscode-button-secondaryBackground, #3a3d41);
+  --button-secondary-fg:   var(--vscode-button-secondaryForeground, #fff);
   --button-secondary-hover: var(--vscode-button-secondaryHoverBackground, #45494e);
-  --badge-bg: var(--vscode-badge-background, #4d4d4d);
-  --badge-fg: var(--vscode-badge-foreground, #fff);
-  --link: var(--vscode-textLink-foreground, #3794ff);
-  --desc: var(--vscode-descriptionForeground, #888);
+
+  /* semantic */
+  --badge-bg:    var(--vscode-badge-background, #4d4d4d);
+  --badge-fg:    var(--vscode-badge-foreground, #fff);
+  --link:        var(--vscode-textLink-foreground, #3794ff);
+  --desc:        var(--vscode-descriptionForeground, #888);
   --focus-border: var(--vscode-focusBorder, #007fd4);
+
+  /* Fluent motion */
+  --duration-fast:   100ms;
+  --duration-normal: 200ms;
+  --duration-slow:   300ms;
+  --ease:            cubic-bezier(0.33, 0, 0.67, 1);
+  --ease-decelerate: cubic-bezier(0, 0, 0, 1);
+  --ease-accelerate: cubic-bezier(1, 0, 1, 1);
+
+  /* Fluent spacing (4 px grid) */
+  --space-xxs: 2px;
+  --space-xs:  4px;
+  --space-s:   8px;
+  --space-m:   12px;
+  --space-l:   16px;
+  --space-xl:  20px;
+  --space-xxl: 24px;
+  --space-xxxl: 32px;
+
+  /* Fluent radii */
+  --radius-s:     4px;
+  --radius-m:     6px;
+  --radius-l:     8px;
+  --radius-xl:    12px;
+  --radius-round: 9999px;
+
+  /* Fluent elevation (adapts to theme) */
+  --shadow-2:  0 1px 2px  rgba(0, 0, 0, 0.14), 0 0 2px rgba(0, 0, 0, 0.12);
+  --shadow-4:  0 2px 4px  rgba(0, 0, 0, 0.14), 0 0 2px rgba(0, 0, 0, 0.12);
+  --shadow-8:  0 4px 8px  rgba(0, 0, 0, 0.14), 0 0 2px rgba(0, 0, 0, 0.12);
+  --shadow-16: 0 8px 16px rgba(0, 0, 0, 0.14), 0 0 2px rgba(0, 0, 0, 0.12);
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
+/* ── Reset ──────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: var(--vscode-font-family, "Segoe UI", sans-serif);
+  font-family: "Segoe UI Variable", "Segoe UI", var(--vscode-font-family), system-ui, -apple-system, sans-serif;
   font-size: var(--vscode-font-size, 13px);
   color: var(--fg);
   background: var(--bg);
@@ -36,62 +89,66 @@ body {
   height: 100vh;
   display: flex;
   flex-direction: column;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* -- Header -------------------------------------------------- */
+/* ── Header ─────────────────────────────────────────────────── */
 .header {
-  padding: 14px 20px 0 20px;
+  padding: var(--space-l) var(--space-xl) 0;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-m);
   flex-shrink: 0;
 }
 
 .header .logo {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   display: flex;
   align-items: center;
-  gap: 10px;
-  letter-spacing: -0.2px;
+  gap: var(--space-s);
+  letter-spacing: -0.3px;
 }
 
 .header .logo .icon {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   background: var(--button-bg);
-  border-radius: 8px;
+  border-radius: var(--radius-l);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--button-fg);
   letter-spacing: -0.5px;
+  box-shadow: var(--shadow-2);
 }
 
-/* -- Tabs ---------------------------------------------------- */
+/* ── Tabs (Fluent pivot) ────────────────────────────────────── */
 .tabs {
   display: flex;
-  border-bottom: 1px solid var(--border);
-  padding: 0 20px;
-  margin-top: 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 0 var(--space-xl);
+  margin-top: var(--space-m);
   flex-shrink: 0;
-  gap: 4px;
+  gap: var(--space-xs);
 }
 
 .tab {
-  padding: 8px 18px;
+  position: relative;
+  padding: var(--space-s) var(--space-l);
   cursor: pointer;
   border-bottom: 2px solid transparent;
   color: var(--desc);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
   user-select: none;
-  transition: color 0.15s ease, border-bottom-color 0.15s ease;
-  border-radius: 4px 4px 0 0;
+  transition:
+    color var(--duration-normal) var(--ease),
+    background var(--duration-fast) var(--ease);
+  border-radius: var(--radius-s) var(--radius-s) 0 0;
 }
 
 .tab:hover {
@@ -104,12 +161,12 @@ body {
   border-bottom-color: var(--link);
 }
 
-/* -- Toolbar ------------------------------------------------- */
+/* ── Toolbar ────────────────────────────────────────────────── */
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 12px 20px;
+  gap: var(--space-l);
+  padding: var(--space-m) var(--space-xl);
   flex-shrink: 0;
   flex-wrap: wrap;
 }
@@ -119,7 +176,7 @@ body {
   font-weight: 600;
   color: var(--desc);
   text-transform: uppercase;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.4px;
 }
 
 .search-box {
@@ -130,34 +187,38 @@ body {
   max-width: 380px;
 }
 
+/* Fluent-style inputs: bottom-accent border on focus */
 .search-box input,
 .filter-group select {
   width: 100%;
-  padding: 5px 10px;
+  padding: 5px var(--space-m);
   background: var(--input-bg);
   color: var(--input-fg);
   border: 1px solid var(--input-border);
-  border-radius: 4px;
+  border-radius: var(--radius-s);
   font-size: 13px;
   font-family: inherit;
   outline: none;
-  transition: border-color 0.15s ease;
-}
-
-.search-box input::placeholder {
-  color: var(--desc);
-  opacity: 0.7;
+  transition:
+    border-color var(--duration-normal) var(--ease),
+    box-shadow var(--duration-normal) var(--ease);
 }
 
 .search-box input:focus,
 .filter-group select:focus {
   border-color: var(--focus-border);
+  box-shadow: 0 0 0 1px var(--focus-border);
+}
+
+.search-box input::placeholder {
+  color: var(--desc);
+  opacity: 0.6;
 }
 
 .filter-group {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-xs);
 }
 
 .filter-group select {
@@ -169,19 +230,20 @@ body {
   font-size: 11px;
   color: var(--desc);
   margin-left: auto;
-  opacity: 0.85;
+  opacity: 0.75;
 }
 
-/* -- Table --------------------------------------------------- */
+/* ── Table ──────────────────────────────────────────────────── */
 .table-wrapper {
   flex: 1;
   overflow: auto;
-  padding: 0 20px 20px 20px;
+  padding: 0 var(--space-xl) var(--space-xl);
 }
 
 table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   table-layout: fixed;
 }
 
@@ -193,7 +255,7 @@ thead {
 
 th {
   background: var(--header-bg);
-  padding: 8px 12px;
+  padding: var(--space-s) var(--space-m);
   text-align: left;
   font-size: 11px;
   font-weight: 600;
@@ -205,24 +267,31 @@ th {
   overflow: hidden;
   text-overflow: ellipsis;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
-  transition: color 0.15s ease;
+  letter-spacing: 0.4px;
+  transition: color var(--duration-fast) var(--ease);
 }
 
 th:hover { color: var(--fg); }
-th .sort-icon { font-size: 10px; margin-left: 4px; opacity: 0.8; }
+th .sort-icon { font-size: 10px; margin-left: var(--space-xs); opacity: 0.7; }
 
 td {
-  padding: 6px 12px;
-  border-bottom: 1px solid var(--border);
+  padding: var(--space-s) var(--space-m);
+  border-bottom: 1px solid var(--border-subtle);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: 13px;
-  transition: background 0.1s ease;
+  transition: background var(--duration-fast) var(--ease);
 }
 
-tr:hover td { background: var(--hover-bg); }
+/* Fluent: subtle row highlight on hover */
+tr:hover td {
+  background: var(--hover-bg);
+}
+
+/* Fluent: first/last cell rounding for visual grouping */
+tr:hover td:first-child { border-radius: var(--radius-s) 0 0 var(--radius-s); }
+tr:hover td:last-child  { border-radius: 0 var(--radius-s) var(--radius-s) 0; }
 
 .col-type    { width: 90px; }
 .col-major   { width: 70px; }
@@ -231,60 +300,65 @@ tr:hover td { background: var(--hover-bg); }
 .col-date    { width: 120px; }
 .col-actions { width: 270px; }
 
-/* -- Badges -------------------------------------------------- */
+/* ── Badges (Fluent pill style) ─────────────────────────────── */
 .badge {
   display: inline-block;
-  padding: 2px 8px;
-  border-radius: 4px;
+  padding: var(--space-xxs) var(--space-s);
+  border-radius: var(--radius-round);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.2px;
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
 .badge-sandbox {
-  background: rgba(55, 148, 255, 0.12);
+  background: rgba(55, 148, 255, 0.1);
   color: #3794ff;
-  border: 1px solid rgba(55, 148, 255, 0.25);
+  border: 1px solid rgba(55, 148, 255, 0.2);
 }
 
 .badge-onprem {
-  background: rgba(204, 167, 0, 0.12);
+  background: rgba(204, 167, 0, 0.1);
   color: #cca700;
-  border: 1px solid rgba(204, 167, 0, 0.25);
+  border: 1px solid rgba(204, 167, 0, 0.2);
 }
 
-/* -- Buttons ------------------------------------------------- */
+/* ── Buttons (Fluent compound) ──────────────────────────────── */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 4px 10px;
-  font-size: 11px;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-m);
+  font-size: 12px;
   font-family: inherit;
   font-weight: 500;
-  border: 1px solid transparent;
-  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-s);
   cursor: pointer;
   white-space: nowrap;
-  line-height: 1.4;
-  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+  line-height: 1.45;
+  transition:
+    background var(--duration-normal) var(--ease),
+    border-color var(--duration-normal) var(--ease),
+    box-shadow var(--duration-normal) var(--ease),
+    transform var(--duration-fast) var(--ease-decelerate);
   background: var(--button-secondary-bg);
   color: var(--button-secondary-fg);
-  margin-right: 4px;
+  margin-right: var(--space-xs);
 }
 
 .btn:hover {
   background: var(--button-secondary-hover);
+  box-shadow: var(--shadow-2);
 }
 
 .btn:active {
-  opacity: 0.85;
+  transform: scale(0.97);
 }
 
 .btn:focus-visible {
-  outline: 1px solid var(--focus-border);
+  outline: 2px solid var(--focus-border);
   outline-offset: 1px;
 }
 
@@ -292,10 +366,12 @@ tr:hover td { background: var(--hover-bg); }
   background: var(--button-bg);
   color: var(--button-fg);
   border-color: transparent;
+  font-weight: 600;
 }
 
 .btn-primary:hover {
   background: var(--button-hover);
+  box-shadow: var(--shadow-4);
 }
 
 .btn-create {
@@ -307,44 +383,50 @@ tr:hover td { background: var(--hover-bg); }
 
 .btn-create:hover {
   background: #20a436;
+  box-shadow: var(--shadow-4);
 }
 
-/* -- States -------------------------------------------------- */
+/* ── State panels ───────────────────────────────────────────── */
 .state-box {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 48px 24px;
+  padding: 56px var(--space-xxl);
   color: var(--desc);
-  gap: 12px;
+  gap: var(--space-l);
   font-size: 13px;
 }
 
 .state-box span {
-  opacity: 0.85;
+  opacity: 0.8;
 }
 
+/* Fluent progress ring */
 .spinner {
-  width: 28px;
-  height: 28px;
-  border: 3px solid var(--border);
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border-subtle);
   border-top-color: var(--link);
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  animation: fluent-spin 1s var(--ease) infinite;
 }
 
-@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes fluent-spin {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
 
 .error-text {
   color: var(--vscode-errorForeground, #f44747);
   opacity: 1 !important;
+  font-weight: 500;
 }
 
-/* -- Scrollbar (Webkit) -------------------------------------- */
+/* ── Scrollbar (Fluent thin) ────────────────────────────────── */
 .table-wrapper::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
 
 .table-wrapper::-webkit-scrollbar-track {
@@ -353,9 +435,16 @@ tr:hover td { background: var(--hover-bg); }
 
 .table-wrapper::-webkit-scrollbar-thumb {
   background: var(--vscode-scrollbarSlider-background, rgba(121, 121, 121, 0.4));
-  border-radius: 5px;
+  border-radius: var(--radius-round);
 }
 
 .table-wrapper::-webkit-scrollbar-thumb:hover {
   background: var(--vscode-scrollbarSlider-hoverBackground, rgba(100, 100, 100, 0.7));
+}
+
+/* ── Focus visible ring (global accessibility) ──────────────── */
+:focus-visible {
+  outline: 2px solid var(--focus-border);
+  outline-offset: -1px;
+  border-radius: var(--radius-s);
 }
