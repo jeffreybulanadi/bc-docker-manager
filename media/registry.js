@@ -144,7 +144,7 @@
       case "countries":
         allCountries = msg.countries;
         populateCountryDropdown(msg.countries);
-        showPrompt();
+        showLoading();
         break;
 
       case "versions":

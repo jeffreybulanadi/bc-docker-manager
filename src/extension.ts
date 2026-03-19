@@ -55,6 +55,11 @@ export async function activate(
     healthProvider,
   );
 
+  // ── SWR: refresh tree views when background revalidation finds new data ─
+  context.subscriptions.push(
+    docker.onDidUpdate(() => refreshAll()),
+  );
+
   // ── Helper ────────────────────────────────────────────────────
   let _refreshTimer: ReturnType<typeof setTimeout> | undefined;
   function refreshAll(): void {

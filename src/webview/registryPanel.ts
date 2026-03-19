@@ -279,15 +279,9 @@ export class RegistryPanel {
   }
 
   private async _initPanel(): Promise<void> {
-    try {
-      const countries = await this._artifacts.getCountries("sandbox");
-      this._post({ command: "countries", type: "sandbox", countries });
-    } catch (err) {
-      this._post({
-        command: "error",
-        message: err instanceof Error ? err.message : String(err),
-      });
-    }
+    // Auto-load sandbox with a sensible default country (e.g. "us")
+    // so the user sees data immediately instead of a blank prompt.
+    await this._handleLoadCountry("sandbox");
   }
 
   private async _handleLoadCountry(

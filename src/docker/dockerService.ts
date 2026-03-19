@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
+import { SWRCache } from "../services/swrCache";
 
 // ────────────────────────── Interfaces ──────────────────────────
 
@@ -68,6 +69,19 @@ const BC_IMAGE = "mcr.microsoft.com/businesscentral:ltsc2022";
  */
 export class DockerService {
 
+  /** Fires when background SWR revalidation produces updated data. */
+  private readonly _onDidUpdate = new vscode.EventEmitter<void>();
+  readonly onDidUpdate: vscode.Event<void> = this._onDidUpdate.event;
+
+  private readonly _containerCache: SWRCache<DockerContainer[]>;
+  private readonly _imageCache: SWRCache<DockerImage[]>;
+
+  constructor() {
+    const notify = () => this._onDidUpdate.fire();
+    this._containerCache = new SWRCache<DockerContainer[]>(10_000, notify);
+    this._imageCache = new SWRCache<DockerImage[]>(10_000, notify);
+  }
+
   /** True if the last ensureNetworking() call actually ran a fix (UAC elevation). */
   private _networkingJustRan = false;
 
@@ -107,8 +121,12 @@ export class DockerService {
 
   // ── containers ──────────────────────────────────────────────
 
-  /** List every container (running + stopped). */
+  /** List every container (running + stopped). SWR-cached. */
   async getContainers(): Promise<DockerContainer[]> {
+    return this._containerCache.get("all", () => this._fetchContainers());
+  }
+
+  private async _fetchContainers(): Promise<DockerContainer[]> {
     const raw = await this.exec(
       'docker ps -a --no-trunc --format "{{json .}}"'
     );
@@ -131,6 +149,10 @@ export class DockerService {
    *     anywhere in the name, or "bc" as a delimited segment).
    */
   async getBcContainers(): Promise<DockerContainer[]> {
+    return this._containerCache.get("bc", () => this._fetchBcContainers());
+  }
+
+  private async _fetchBcContainers(): Promise<DockerContainer[]> {
     // Single docker ps call with Labels included for client-side filtering
     const raw = await this.exec(
       'docker ps -a --no-trunc --format "{{json .}}"'
@@ -151,43 +173,54 @@ export class DockerService {
 
   async startContainer(id: string): Promise<void> {
     await this.exec(`docker start ${id}`);
+    this.invalidateContainers();
   }
 
   async stopContainer(id: string): Promise<void> {
     await this.exec(`docker stop ${id}`);
+    this.invalidateContainers();
   }
 
   async restartContainer(id: string): Promise<void> {
     await this.exec(`docker restart ${id}`);
+    this.invalidateContainers();
   }
 
   async removeContainer(id: string): Promise<void> {
     await this.exec(`docker rm -f ${id}`);
+    this.invalidateContainers();
   }
 
   // ── images ──────────────────────────────────────────────────
 
-  /** List all locally available Docker images. */
+  /** List all locally available Docker images. SWR-cached. */
   async getImages(): Promise<DockerImage[]> {
+    return this._imageCache.get("all", () => this._fetchImages());
+  }
+
+  private async _fetchImages(): Promise<DockerImage[]> {
     const raw = await this.exec(
       'docker images --no-trunc --format "{{json .}}"'
     );
     return this.parseImageLines(raw);
   }
 
-  /** List only BC-related Docker images. */
+  /** List only BC-related Docker images. SWR-cached. */
   async getBcImages(): Promise<DockerImage[]> {
-    const all = await this.getImages();
-    return all.filter((img) => {
-      const full = img.repository === "<none>"
-        ? ""
-        : `${img.repository}:${img.tag}`;
-      return this.looksLikeBcImage(full);
+    return this._imageCache.get("bc", async () => {
+      const all = await this._fetchImages();
+      return all.filter((img) => {
+        const full = img.repository === "<none>"
+          ? ""
+          : `${img.repository}:${img.tag}`;
+        return this.looksLikeBcImage(full);
+      });
     });
   }
 
   async removeImage(id: string): Promise<void> {
     await this.exec(`docker rmi ${id}`);
+    this.invalidateImages();
   }
 
   /**
@@ -197,6 +230,19 @@ export class DockerService {
    */
   async pullImage(ref: string, dockerPath = "docker"): Promise<void> {
     await this.exec(`"${dockerPath}" pull ${ref}`, 600_000);
+    this.invalidateImages();
+  }
+
+  // ── cache invalidation ─────────────────────────────────────
+
+  /** Invalidate container caches so the next read fetches fresh data. */
+  invalidateContainers(): void {
+    this._containerCache.invalidateAll();
+  }
+
+  /** Invalidate image caches so the next read fetches fresh data. */
+  invalidateImages(): void {
+    this._imageCache.invalidateAll();
   }
 
   // ── inspect / labels ────────────────────────────────────────

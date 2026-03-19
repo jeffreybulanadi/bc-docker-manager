@@ -194,12 +194,23 @@ export class BcArtifactsService {
 
   /**
    * Get only the N newest versions for a type + country.
+   * Uses the parsed cache when available to avoid re-parsing.
    */
   async getLatestVersions(
     type: BcArtifactType,
     country: string,
     limit: number,
   ): Promise<{ versions: BcArtifactVersion[]; totalCount: number }> {
+    // Try parsed cache first — just slice the tail
+    const cacheKey = `parsed:${type}/${country}`;
+    const cached = this._parsedCache.get(cacheKey);
+    if (cached) {
+      return {
+        versions: cached.slice(0, limit),
+        totalCount: cached.length,
+      };
+    }
+
     const raw = await this._getRawIndex(type, country);
     const totalCount = raw.length;
     const tail = raw.slice(Math.max(0, raw.length - limit));
