@@ -12,6 +12,7 @@ import { VolumeProvider } from "./tree/volumeProvider";
 import { RegistryPanel } from "./webview/registryPanel";
 import { ContainerTreeItem, ImageTreeItem } from "./tree/models";
 import { VolumeTreeItem } from "./tree/volumeProvider";
+import { initTelemetry, disposeTelemetry, sendEvent, sendError } from "./services/telemetry";
 
 /**
  * Extension entry point.
@@ -23,6 +24,9 @@ import { VolumeTreeItem } from "./tree/volumeProvider";
 export async function activate(
   context: vscode.ExtensionContext
 ): Promise<void> {
+  initTelemetry();
+  sendEvent("extension/activated");
+
   const docker = new DockerService();
   const bcService = new BcContainerService(docker);
   const artifacts = new BcArtifactsService();
@@ -932,7 +936,7 @@ export async function activate(
 }
 
 export function deactivate(): void {
-  // VS Code disposes subscriptions automatically.
+  disposeTelemetry();
 }
 
 // ── Helpers ─────────────────────────────────────────────────────
@@ -947,6 +951,7 @@ function withProgress(title: string, task: () => Promise<void>): Thenable<void> 
 function showError(action: string, name: string, err: unknown): void {
   const msg = err instanceof Error ? err.message : String(err);
   vscode.window.showErrorMessage(`Failed to ${action} "${name}": ${msg}`);
+  sendError("command/failed", { action, name, message: msg });
 }
 
 /**
