@@ -99,6 +99,14 @@ export class DockerHealthProvider
   private static readonly STABLE_THRESHOLD = 3; // consecutive healthy checks before slowing
 
   constructor() {
+    // Show placeholder items immediately so the tree never appears empty
+    // (which would flash the "Getting Started" welcome view).
+    this._checks = [
+      ...(process.platform === "win32"
+        ? [{ id: "features", label: "Step 1 · Windows Features", status: "checking" as CheckStatus, detail: "Checking…" }]
+        : []),
+      { id: "docker", label: "Step 2 · Docker Engine", status: "checking" as CheckStatus, detail: "Checking…" },
+    ];
     this._runChecks();
     this._scheduleNext();
   }
