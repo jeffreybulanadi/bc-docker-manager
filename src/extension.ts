@@ -93,6 +93,9 @@ export async function activate(
     })
   );
 
+  // Auto-open BC Artifacts Explorer on activation
+  RegistryPanel.show(artifacts, docker, context.extensionUri);
+
   // Diagnostic: test CDN connectivity from inside the extension host
   context.subscriptions.push(
     vscode.commands.registerCommand("bcDockerManager.testCdn", async () => {
