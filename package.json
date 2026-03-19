@@ -70,17 +70,12 @@
       {
         "view": "bcDockerManager-containers",
         "contents": "Docker is not available.\nCheck the Environment panel to get started.",
-        "when": "!bcDockerManager.dockerReady"
+        "when": "bcDockerManager.dockerReady == false"
       },
       {
         "view": "bcDockerManager-containers",
         "contents": "No containers found.\n[Browse Artifacts to Create One](command:bcDockerManager.openExplorer)",
         "when": "bcDockerManager.dockerReady"
-      },
-      {
-        "view": "bcDockerManager-images",
-        "contents": "Docker is not available.\nCheck the Environment panel to get started.",
-        "when": "!bcDockerManager.dockerReady"
       },
       {
         "view": "bcDockerManager-images",
