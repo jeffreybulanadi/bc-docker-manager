@@ -306,13 +306,13 @@ export class RegistryPanel {
     const key = `${type}/${country}`;
 
     try {
-      // Always send available major versions upfront (cheap operation)
-      const majors = await this._artifacts.getMajorVersions(type, country);
-      this._post({ command: "majorVersions", majors });
-
       if (this._fullyCached.has(key)) {
         const all = this._cache.get(key)!;
         const initial = all.slice(0, RegistryPanel.PAGE_SIZE);
+        // Majors can be derived client-side from full cache
+        const majorSet = new Set(all.map((v) => v.major));
+        const majors = Array.from(majorSet).sort((a, b) => b - a);
+        this._post({ command: "majorVersions", majors });
         this._post({
           command: "versions",
           type, country,
@@ -324,8 +324,13 @@ export class RegistryPanel {
         return;
       }
 
-      const { versions: latest, totalCount } =
-        await this._artifacts.getLatestVersions(type, country, RegistryPanel.PAGE_SIZE);
+      // Fetch majors and latest page in parallel
+      const [majors, { versions: latest, totalCount }] = await Promise.all([
+        this._artifacts.getMajorVersions(type, country),
+        this._artifacts.getLatestVersions(type, country, RegistryPanel.PAGE_SIZE),
+      ]);
+
+      this._post({ command: "majorVersions", majors });
 
       this._cache.set(key, latest);
 

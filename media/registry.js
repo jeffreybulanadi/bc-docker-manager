@@ -240,41 +240,86 @@
       loadedVersions.length + " of " + totalCount + " loaded" +
       (hasMore ? " \u00b7 scroll for more" : "");
 
-    tableBody.innerHTML = filtered.map(function (v) {
-      var date  = v.creationTime ? new Date(v.creationTime).toLocaleDateString() : "\u2014";
-      var badge = v.type === "sandbox" ? "badge-sandbox" : "badge-onprem";
-      var label = v.type === "sandbox" ? "Sandbox" : "OnPrem";
-      return "<tr>" +
-        '<td class="col-type"><span class="badge ' + badge + '">' + label + "</span></td>" +
-        '<td class="col-major">' + v.major + "</td>" +
-        '<td class="col-version">' + v.version + "</td>" +
-        '<td class="col-country">' + v.country.toUpperCase() + "</td>" +
-        '<td class="col-date">' + date + "</td>" +
-        '<td class="col-actions">' +
-          '<button class="btn btn-create" data-action="create"' +
-            ' data-type="' + escAttr(v.type) + '"' +
-            ' data-version="' + escAttr(v.version) + '"' +
-            ' data-country="' + escAttr(v.country) + '"' +
-            ' data-url="' + escAttr(v.artifactUrl) + '"' +
-            ' title="Create a Docker container with this artifact">' +
-            "\u25B6 Create" +
-          "</button>" +
-          '<button class="btn btn-primary" data-action="copyUrl"' +
-            ' data-url="' + escAttr(v.artifactUrl) + '"' +
-            ' title="Copy artifact URL to clipboard">' +
-            "\uD83D\uDD17 URL" +
-          "</button>" +
-          '<button class="btn" data-action="copyVer"' +
-            ' data-ver="' + escAttr(v.version) + '"' +
-            ' title="Copy version string to clipboard">' +
-            "\uD83D\uDCCB Ver" +
-          "</button>" +
-        "</td></tr>";
-    }).join("");
+    // Build rows via DocumentFragment for a single DOM reflow
+    var frag = document.createDocumentFragment();
+    for (var i = 0; i < filtered.length; i++) {
+      frag.appendChild(buildRow(filtered[i]));
+    }
+    tableBody.textContent = "";
+    tableBody.appendChild(frag);
   }
 
-  function escAttr(s) {
-    return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/</g, "&lt;");
+  function buildRow(v) {
+    var tr   = document.createElement("tr");
+    var date = v.creationTime ? new Date(v.creationTime).toLocaleDateString() : "\u2014";
+    var isSandbox = v.type === "sandbox";
+
+    // Type badge
+    var tdType = document.createElement("td");
+    tdType.className = "col-type";
+    var badge = document.createElement("span");
+    badge.className = "badge " + (isSandbox ? "badge-sandbox" : "badge-onprem");
+    badge.textContent = isSandbox ? "Sandbox" : "OnPrem";
+    tdType.appendChild(badge);
+    tr.appendChild(tdType);
+
+    // Major
+    var tdMajor = document.createElement("td");
+    tdMajor.className = "col-major";
+    tdMajor.textContent = String(v.major);
+    tr.appendChild(tdMajor);
+
+    // Version
+    var tdVer = document.createElement("td");
+    tdVer.className = "col-version";
+    tdVer.textContent = v.version;
+    tr.appendChild(tdVer);
+
+    // Country
+    var tdCountry = document.createElement("td");
+    tdCountry.className = "col-country";
+    tdCountry.textContent = v.country.toUpperCase();
+    tr.appendChild(tdCountry);
+
+    // Date
+    var tdDate = document.createElement("td");
+    tdDate.className = "col-date";
+    tdDate.textContent = date;
+    tr.appendChild(tdDate);
+
+    // Actions
+    var tdActions = document.createElement("td");
+    tdActions.className = "col-actions";
+
+    var btnCreate = document.createElement("button");
+    btnCreate.className = "btn btn-create";
+    btnCreate.textContent = "\u25B6 Create";
+    btnCreate.title = "Create a Docker container with this artifact";
+    btnCreate.dataset.action  = "create";
+    btnCreate.dataset.type    = v.type;
+    btnCreate.dataset.version = v.version;
+    btnCreate.dataset.country = v.country;
+    btnCreate.dataset.url     = v.artifactUrl;
+    tdActions.appendChild(btnCreate);
+
+    var btnUrl = document.createElement("button");
+    btnUrl.className = "btn btn-primary";
+    btnUrl.textContent = "\uD83D\uDD17 URL";
+    btnUrl.title = "Copy artifact URL to clipboard";
+    btnUrl.dataset.action = "copyUrl";
+    btnUrl.dataset.url    = v.artifactUrl;
+    tdActions.appendChild(btnUrl);
+
+    var btnVer = document.createElement("button");
+    btnVer.className = "btn";
+    btnVer.textContent = "\uD83D\uDCCB Ver";
+    btnVer.title = "Copy version string to clipboard";
+    btnVer.dataset.action = "copyVer";
+    btnVer.dataset.ver    = v.version;
+    tdActions.appendChild(btnVer);
+
+    tr.appendChild(tdActions);
+    return tr;
   }
 
   /* Delegate click events from table buttons */

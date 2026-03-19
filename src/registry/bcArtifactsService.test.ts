@@ -232,6 +232,7 @@ describe("BcArtifactsService — disk cache", () => {
     svc.setStoragePath(tmpDir);
 
     await svc.getVersions("sandbox", "us");
+    await svc._flushWrites();
 
     const cacheFile = path.join(tmpDir, "artifact-cache", "sandbox_us.json");
     expect(fs.existsSync(cacheFile)).toBe(true);
@@ -245,6 +246,7 @@ describe("BcArtifactsService — disk cache", () => {
     const svc1 = makeService(fetchMock1);
     svc1.setStoragePath(tmpDir);
     await svc1.getVersions("sandbox", "us");
+    await svc1._flushWrites();
     expect(fetchMock1).toHaveBeenCalledTimes(1);
 
     // New service instance — fresh memory cache but same disk cache dir
@@ -261,6 +263,7 @@ describe("BcArtifactsService — disk cache", () => {
     const svc1 = makeService(fetchMock1);
     svc1.setStoragePath(tmpDir);
     await svc1.getVersions("sandbox", "us");
+    await svc1._flushWrites();
 
     // Set file mtime to 2 hours ago so the cache is expired
     const cacheFile = path.join(tmpDir, "artifact-cache", "sandbox_us.json");

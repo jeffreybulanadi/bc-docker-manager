@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import * as fsp from "fs/promises";
 import * as path from "path";
 
 // ────────────────────────── Interfaces ──────────────────────────
@@ -66,6 +67,9 @@ export class BcArtifactsService {
   /** Disk-cache directory (set via setStoragePath). */
   private _diskCacheDir: string | undefined;
 
+  /** Pending disk-write promises (for test flushing). */
+  private _pendingWrites: Promise<void>[] = [];
+
   /**
    * Call once after construction to enable disk caching.
    * Pass `context.globalStorageUri.fsPath`.
@@ -132,13 +136,14 @@ export class BcArtifactsService {
     return path.join(this._diskCacheDir, key.replace(/\//g, "_") + ".json");
   }
 
-  private _readDiskCache(key: string): { Version: string; CreationTime: string }[] | undefined {
+  private async _readDiskCache(key: string): Promise<{ Version: string; CreationTime: string }[] | undefined> {
     const fp = this._diskCachePath(key);
     if (!fp) { return undefined; }
     try {
-      const stat = fs.statSync(fp);
+      const stat = await fsp.stat(fp);
       if (Date.now() - stat.mtimeMs > CACHE_TTL_MS) { return undefined; }
-      return JSON.parse(fs.readFileSync(fp, "utf8"));
+      const content = await fsp.readFile(fp, "utf8");
+      return JSON.parse(content);
     } catch {
       return undefined;
     }
@@ -147,7 +152,16 @@ export class BcArtifactsService {
   private _writeDiskCache(key: string, data: unknown): void {
     const fp = this._diskCachePath(key);
     if (!fp) { return; }
-    try { fs.writeFileSync(fp, JSON.stringify(data)); } catch { /* best-effort */ }
+    const p = fsp.writeFile(fp, JSON.stringify(data)).catch(() => { /* best-effort */ });
+    this._pendingWrites.push(p);
+    p.then(() => {
+      this._pendingWrites = this._pendingWrites.filter((w) => w !== p);
+    });
+  }
+
+  /** Wait for all pending disk writes to complete. Useful for testing. */
+  async _flushWrites(): Promise<void> {
+    await Promise.all(this._pendingWrites);
   }
 
   // ── Public API ──────────────────────────────────────────────
@@ -163,7 +177,7 @@ export class BcArtifactsService {
     if (mem) { return (mem as unknown as string[]).slice().sort(); }
 
     // 2. Disk
-    const disk = this._readDiskCache(cacheKey);
+    const disk = await this._readDiskCache(cacheKey);
     if (disk) {
       this._memCache.set(cacheKey, disk);
       return (disk as unknown as string[]).slice().sort();
@@ -230,7 +244,7 @@ export class BcArtifactsService {
     const mem = this._memCache.get(key);
     if (mem) { return mem; }
 
-    const disk = this._readDiskCache(key);
+    const disk = await this._readDiskCache(key);
     if (disk) {
       this._memCache.set(key, disk);
       return disk;
