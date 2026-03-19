@@ -50,11 +50,6 @@
           "icon": "$(pulse)"
         },
         {
-          "id": "bcDockerManager-artifacts",
-          "name": "BC Artifacts",
-          "icon": "$(cloud-download)"
-        },
-        {
           "id": "bcDockerManager-containers",
           "name": "Containers",
           "icon": "$(server)"
@@ -76,6 +71,26 @@
         "view": "bcDockerManager-containers",
         "contents": "Docker is not available.\nCheck the Environment panel to get started.",
         "when": "!bcDockerManager.dockerReady"
+      },
+      {
+        "view": "bcDockerManager-containers",
+        "contents": "No containers found.\n[Browse Artifacts to Create One](command:bcDockerManager.openExplorer)",
+        "when": "bcDockerManager.dockerReady"
+      },
+      {
+        "view": "bcDockerManager-images",
+        "contents": "Docker is not available.\nCheck the Environment panel to get started.",
+        "when": "!bcDockerManager.dockerReady"
+      },
+      {
+        "view": "bcDockerManager-images",
+        "contents": "No local images found.\nPull an image from the Artifacts Explorer.",
+        "when": "bcDockerManager.dockerReady"
+      },
+      {
+        "view": "bcDockerManager-volumes",
+        "contents": "No volumes found.\n[Create Volume](command:bcDockerManager.createVolume)",
+        "when": "bcDockerManager.dockerReady"
       }
     ],
     "configuration": {
@@ -439,8 +454,8 @@
         },
         {
           "command": "bcDockerManager.openExplorer",
-          "when": "view == bcDockerManager-artifacts",
-          "group": "navigation@1"
+          "when": "view == bcDockerManager-containers",
+          "group": "navigation@3"
         },
         {
           "command": "bcDockerManager.refreshVolumes",

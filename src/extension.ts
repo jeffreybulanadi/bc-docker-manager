@@ -9,7 +9,6 @@ import { ContainerProvider } from "./tree/containerProvider";
 import { ImageProvider } from "./tree/imageProvider";
 import { DockerHealthProvider } from "./tree/dockerHealthProvider";
 import { VolumeProvider } from "./tree/volumeProvider";
-import { ArtifactsProvider } from "./tree/artifactsProvider";
 import { RegistryPanel } from "./webview/registryPanel";
 import { ContainerTreeItem, ImageTreeItem } from "./tree/models";
 import { VolumeTreeItem } from "./tree/volumeProvider";
@@ -33,7 +32,6 @@ export async function activate(
   const imageProvider = new ImageProvider(docker);
   const healthProvider = new DockerHealthProvider();
   const volumeProvider = new VolumeProvider(bcService);
-  const artifactsProvider = new ArtifactsProvider();
 
   // Preload countries in background so the panel opens instantly.
   // This warms up the TLS connection + populates memory & disk cache.
@@ -44,9 +42,6 @@ export async function activate(
   context.subscriptions.push(
     vscode.window.createTreeView("bcDockerManager-environment", {
       treeDataProvider: healthProvider,
-    }),
-    vscode.window.createTreeView("bcDockerManager-artifacts", {
-      treeDataProvider: artifactsProvider,
     }),
     vscode.window.createTreeView("bcDockerManager-containers", {
       treeDataProvider: containerProvider,
@@ -485,7 +480,9 @@ export async function activate(
         if (answer !== "Remove") { return; }
 
         try {
-          await docker.removeContainer(item.container.id);
+          await withProgress(`Removing "${item.container.names}"…`, () =>
+            docker.removeContainer(item.container.id)
+          );
           vscode.window.showInformationMessage(
             `Container "${item.container.names}" removed.`
           );
@@ -511,7 +508,9 @@ export async function activate(
         if (answer !== "Remove") { return; }
 
         try {
-          await docker.removeImage(item.image.id);
+          await withProgress(`Removing "${label}"…`, () =>
+            docker.removeImage(item.image.id)
+          );
           vscode.window.showInformationMessage(`Image "${label}" removed.`);
           refreshAll();
         } catch (err) {
@@ -796,7 +795,7 @@ export async function activate(
   context.subscriptions.push(
     vscode.commands.registerCommand("bcDockerManager.createVolume", async () => {
       try {
-        await bcService.createVolume();
+        await withProgress("Creating volume…", () => bcService.createVolume());
         volumeProvider.refresh();
       } catch (err) {
         showError("create", "volume", err);
@@ -816,7 +815,9 @@ export async function activate(
         );
         if (answer !== "Remove") { return; }
         try {
-          await bcService.removeVolume(item.volume.name);
+          await withProgress(`Removing volume "${item.volume.name}"…`, () =>
+            bcService.removeVolume(item.volume.name)
+          );
           vscode.window.showInformationMessage(`Volume "${item.volume.name}" removed.`);
           volumeProvider.refresh();
         } catch (err) {
