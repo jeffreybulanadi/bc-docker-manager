@@ -50,6 +50,11 @@
           "icon": "$(pulse)"
         },
         {
+          "id": "bcDockerManager-artifacts",
+          "name": "BC Artifacts",
+          "icon": "$(cloud-download)"
+        },
+        {
           "id": "bcDockerManager-containers",
           "name": "Containers",
           "icon": "$(server)"
@@ -439,8 +444,8 @@
         },
         {
           "command": "bcDockerManager.openExplorer",
-          "when": "view == bcDockerManager-containers",
-          "group": "navigation@3"
+          "when": "view == bcDockerManager-artifacts",
+          "group": "navigation@1"
         },
         {
           "command": "bcDockerManager.refreshVolumes",

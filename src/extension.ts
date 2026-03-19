@@ -9,6 +9,7 @@ import { ContainerProvider } from "./tree/containerProvider";
 import { ImageProvider } from "./tree/imageProvider";
 import { DockerHealthProvider } from "./tree/dockerHealthProvider";
 import { VolumeProvider } from "./tree/volumeProvider";
+import { ArtifactsProvider } from "./tree/artifactsProvider";
 import { RegistryPanel } from "./webview/registryPanel";
 import { ContainerTreeItem, ImageTreeItem } from "./tree/models";
 import { VolumeTreeItem } from "./tree/volumeProvider";
@@ -32,16 +33,20 @@ export async function activate(
   const imageProvider = new ImageProvider(docker);
   const healthProvider = new DockerHealthProvider();
   const volumeProvider = new VolumeProvider(bcService);
+  const artifactsProvider = new ArtifactsProvider(artifacts);
 
   // Preload countries in background so the panel opens instantly.
   // This warms up the TLS connection + populates memory & disk cache.
   artifacts.getCountries("sandbox").catch(() => {});
   artifacts.getCountries("onprem").catch(() => {});
 
-  // ── Tree views (containers + local images + environment health) ─
+  // ── Tree views ─────────────────────────────────────────────────
   context.subscriptions.push(
     vscode.window.createTreeView("bcDockerManager-environment", {
       treeDataProvider: healthProvider,
+    }),
+    vscode.window.createTreeView("bcDockerManager-artifacts", {
+      treeDataProvider: artifactsProvider,
     }),
     vscode.window.createTreeView("bcDockerManager-containers", {
       treeDataProvider: containerProvider,
