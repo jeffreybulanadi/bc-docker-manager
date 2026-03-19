@@ -1,0 +1,44 @@
+BC Docker Manager - Icon Prompts for Nano Banana
+==================================================
+
+PROMPT 1: Marketplace Icon (bc-docker.png, 256x256)
+----------------------------------------------------
+A clean, modern flat 2D app icon. A simplified friendly whale
+silhouette facing right, with a small balance scale (the classic
+weighing scale with two pans hanging from a horizontal beam) sitting
+on its back. The whale is minimal and geometric — a smooth rounded
+body, small tail fin, and a subtle upward smile. The balance scale
+is simple and symmetrical, centered on the whale's back. White whale
+silhouette, bright teal (#00B294) balance scale, on a solid dark
+navy (#1B1B1F) rounded square background. Completely flat 2D, no 3D,
+no shadows, no texture, no gradients. Geometric, minimal, bold,
+friendly. No text, no letters. The concept is "Docker carrying your
+financial business platform." 256x256 pixels, PNG.
+
+Variation: all white shapes on solid teal (#008272) rounded square
+background. Second variation: teal (#00B294) whale with white
+balance scale on dark navy (#1B1B1F) background.
+
+
+PROMPT 2: Activity Bar Icon (icon.svg, 24x24)
+----------------------------------------------
+A minimal flat 2D monochrome icon, 24x24 pixels. A tiny simplified
+whale silhouette facing right with a small balance scale shape on
+its back. Only white on transparent background. Very simple geometric
+shapes, no detail. Similar weight to VS Code built-in sidebar icons.
+Must be legible at 16x16. SVG format.
+
+
+NOTES
+-----
+- Generate the marketplace icon first (larger, more detail allowed).
+- For the sidebar icon, simplify further. VS Code activity bar icons
+  are essentially white silhouettes.
+- Export marketplace icon as PNG 256x256 (marketplace minimum 128x128).
+- Export sidebar icon as SVG 24x24 (monochrome, no fill background).
+- The balance scale represents finance/ERP (debits = credits,
+  financial balance) — the core of Business Central.
+- The whale represents Docker — the underlying container platform.
+- Together: "Docker carrying your financial business platform."
+- Keep the whale simple — think Docker logo level of simplicity.
+- The teal (#00B294) is the Dynamics 365 Business Central brand color.
