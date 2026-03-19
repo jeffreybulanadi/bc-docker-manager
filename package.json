@@ -50,11 +50,6 @@
           "icon": "$(pulse)"
         },
         {
-          "id": "bcDockerManager-explorer",
-          "name": "BC Artifacts",
-          "icon": "$(globe)"
-        },
-        {
           "id": "bcDockerManager-containers",
           "name": "Containers",
           "icon": "$(server)"
@@ -72,10 +67,6 @@
       ]
     },
     "viewsWelcome": [
-      {
-        "view": "bcDockerManager-explorer",
-        "contents": "Browse available Business Central artifacts.\n[Open BC Artifacts Explorer](command:bcDockerManager.openExplorer)"
-      },
       {
         "view": "bcDockerManager-environment",
         "contents": "Getting Started\n\nTwo things are needed to run BC containers:\n\n1. Enable Hyper-V & Windows Containers\n2. Install Docker Engine\n\n[$(rocket) Setup Everything](command:bcDockerManager.setupAll)",
@@ -448,8 +439,8 @@
         },
         {
           "command": "bcDockerManager.openExplorer",
-          "when": "view == bcDockerManager-explorer",
-          "group": "navigation@1"
+          "when": "view == bcDockerManager-containers",
+          "group": "navigation@3"
         },
         {
           "command": "bcDockerManager.refreshVolumes",
