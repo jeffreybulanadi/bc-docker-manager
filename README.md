@@ -87,3 +87,7 @@ Initial release:
 ## License
 
 MIT
+
+## Telemetry
+
+This extension collects anonymous error and usage telemetry using the official [`@vscode/extension-telemetry`](https://www.npmjs.com/package/@vscode/extension-telemetry) package to help improve reliability. No personal data is collected. Telemetry respects your VS Code telemetry setting — disable it anytime via **Settings → Telemetry: Telemetry Level → off**.
