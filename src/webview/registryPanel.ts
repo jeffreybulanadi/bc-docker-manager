@@ -206,20 +206,29 @@ export class RegistryPanel {
     output.show(true);
 
     try {
-      await this._docker.createBcContainer(
+      // Phase 1: Pull image with real-time progress
+      await vscode.window.withProgress(
         {
-          containerName: name,
-          artifactUrl,
-          username,
-          password,
-          memoryLimit: "8G",
-          auth: "UserPassword",
-          updateHosts: true,
+          location: vscode.ProgressLocation.Notification,
+          title: `Pulling BC image`,
+          cancellable: false,
         },
-        output,
+        (progress) => this._docker.createBcContainer(
+          {
+            containerName: name,
+            artifactUrl,
+            username,
+            password,
+            memoryLimit: "8G",
+            auth: "UserPassword",
+            updateHosts: true,
+          },
+          output,
+          progress,
+        ),
       );
 
-      // Wait for the container to fully initialize (downloads artifacts, installs BC, etc.)
+      // Phase 2: Wait for the container to fully initialize
       const containerReady = await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,

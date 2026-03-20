@@ -530,6 +530,32 @@ export async function activate(
   // Docker health is now handled by the DockerHealthProvider tree view.
   // It auto-polls every 15s and shows live status in the sidebar.
 
+  // ── Pre-pull BC image ──────────────────────────────────────────
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("bcDockerManager.pullBcImage", async () => {
+      const image = "mcr.microsoft.com/businesscentral:ltsc2022";
+      const output = vscode.window.createOutputChannel("BC Image Pull");
+      output.show(true);
+      output.appendLine(`Pulling ${image}…\n`);
+
+      try {
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: `Pulling BC image`,
+            cancellable: false,
+          },
+          (progress) => docker.pullImageWithProgress(image, output, progress),
+        );
+        vscode.window.showInformationMessage("BC image pulled successfully! Container creation will be much faster now.");
+        refreshAll();
+      } catch (err) {
+        showError("pull", image, err);
+      }
+    })
+  );
+
   // ── v1.1: Copy Container IP ──────────────────────────────────
 
   context.subscriptions.push(

@@ -180,6 +180,12 @@
         "category": "BC Docker Manager"
       },
       {
+        "command": "bcDockerManager.pullBcImage",
+        "title": "Pre-Pull BC Image",
+        "icon": "$(cloud-download)",
+        "category": "BC Docker Manager"
+      },
+      {
         "command": "bcDockerManager.toggleBcFilter",
         "title": "Toggle BC Filter",
         "icon": "$(filter)",
@@ -451,6 +457,11 @@
           "command": "bcDockerManager.openExplorer",
           "when": "view == bcDockerManager-containers",
           "group": "navigation@3"
+        },
+        {
+          "command": "bcDockerManager.pullBcImage",
+          "when": "view == bcDockerManager-images",
+          "group": "navigation@2"
         },
         {
           "command": "bcDockerManager.refreshVolumes",

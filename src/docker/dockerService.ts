@@ -233,6 +233,98 @@ export class DockerService {
     this.invalidateImages();
   }
 
+  /**
+   * Pull a Docker image with real-time layer progress streamed to
+   * an OutputChannel and optional VS Code progress notification.
+   *
+   * Parses `docker pull` output to track per-layer download/extract
+   * progress and reports an aggregate percentage.
+   */
+  async pullImageWithProgress(
+    ref: string,
+    output: vscode.OutputChannel,
+    progress?: vscode.Progress<{ message?: string; increment?: number }>,
+  ): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      const child = spawn("docker", ["pull", ref]);
+      const layers = new Map<string, { status: string; current: number; total: number }>();
+      let lastPct = 0;
+
+      const updateProgress = () => {
+        if (!progress) { return; }
+        let done = 0;
+        let total = 0;
+        for (const l of layers.values()) {
+          if (l.status === "Already exists" || l.status === "Pull complete") {
+            done += l.total || 1;
+            total += l.total || 1;
+          } else if (l.total > 0) {
+            done += l.current;
+            total += l.total;
+          } else {
+            total += 1;
+          }
+        }
+        const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+        if (pct !== lastPct) {
+          progress.report({ message: `${pct}% — ${layers.size} layers` });
+          lastPct = pct;
+        }
+      };
+
+      child.stdout.on("data", (data: Buffer) => {
+        const text = data.toString();
+        for (const line of text.split("\n")) {
+          const trimmed = line.trim();
+          if (!trimmed) { continue; }
+          output.appendLine(trimmed);
+
+          // Parse layer progress: "abc123: Downloading  12.5MB/45.2MB"
+          const match = trimmed.match(/^([a-f0-9]+):\s+(.+)/i);
+          if (match) {
+            const [, id, rest] = match;
+            const sizeMatch = rest.match(/([\d.]+)\s*[MGK]B\s*\/\s*([\d.]+)\s*[MGK]B/);
+            const entry = layers.get(id) || { status: "", current: 0, total: 0 };
+            if (sizeMatch) {
+              entry.current = parseFloat(sizeMatch[1]);
+              entry.total = parseFloat(sizeMatch[2]);
+            }
+            if (rest.includes("Already exists")) {
+              entry.status = "Already exists";
+            } else if (rest.includes("Pull complete")) {
+              entry.status = "Pull complete";
+            } else if (rest.includes("Downloading")) {
+              entry.status = "Downloading";
+            } else if (rest.includes("Extracting")) {
+              entry.status = "Extracting";
+            }
+            layers.set(id, entry);
+            updateProgress();
+          }
+        }
+      });
+
+      child.stderr.on("data", (data: Buffer) => {
+        output.append(data.toString());
+      });
+
+      child.on("close", (code) => {
+        this.invalidateImages();
+        if (code === 0) {
+          progress?.report({ message: "Pull complete" });
+          resolve();
+        } else {
+          reject(new Error(`docker pull exited with code ${code}`));
+        }
+      });
+
+      child.on("error", (err) => {
+        this.invalidateImages();
+        reject(err);
+      });
+    });
+  }
+
   // ── cache invalidation ─────────────────────────────────────
 
   /** Invalidate container caches so the next read fetches fresh data. */
@@ -394,6 +486,7 @@ export class DockerService {
   async createBcContainer(
     opts: BcContainerOptions,
     output?: vscode.OutputChannel,
+    progress?: vscode.Progress<{ message?: string; increment?: number }>,
   ): Promise<boolean> {
     const log = (msg: string) => output?.appendLine(msg);
     const image = opts.imageName || BC_IMAGE;
@@ -403,17 +496,23 @@ export class DockerService {
     log?.(`Artifact: ${opts.artifactUrl}`);
     log?.(`Auth:     ${opts.auth || "UserPassword"}`);
     log?.(`Memory:   ${opts.memoryLimit || "8G"}`);
-    log?.(`Pull:     always (ensuring latest generic image)`);
     log?.("");
 
-    // Build the docker run command
+    // Pre-pull the image with streaming progress so the user sees
+    // download % instead of a silent wait.
+    log?.(`Pulling image ${image}…`);
+    if (output) {
+      await this.pullImageWithProgress(image, output, progress);
+    } else {
+      await this.pullImage(image);
+    }
+    log?.(`Image ready.\n`);
+
+    // Build the docker run command (no --pull needed, image is fresh)
     const args = this.buildRunArgs(opts, image);
 
     // Run in a VS Code terminal for full interactive output.
-    // We must quote each argument individually so that passwords
-    // containing spaces, $, @, quotes, etc. are not mangled by PowerShell.
     const quotedArgs = args.map((a) => {
-      // Escape single quotes inside the value, then wrap in single quotes
       const escaped = a.replace(/'/g, "''");
       return `'${escaped}'`;
     });
@@ -524,7 +623,6 @@ export class DockerService {
   private buildRunArgs(opts: BcContainerOptions, image: string): string[] {
     const args: string[] = [
       "run", "-d",
-      "--pull", "always",
       "--name", opts.containerName,
       "--hostname", opts.containerName,
       "--memory", opts.memoryLimit || "8G",
