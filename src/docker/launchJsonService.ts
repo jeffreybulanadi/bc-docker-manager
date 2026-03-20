@@ -134,7 +134,33 @@ export class LaunchJsonService {
       if (!picked || picked.length === 0) { return; }
       targetFolder = picked[0];
     } else if (folders.length === 1) {
-      targetFolder = folders[0].uri;
+      // Check if this looks like an AL project (has app.json)
+      const appJson = path.join(folders[0].uri.fsPath, "app.json");
+      if (fs.existsSync(appJson)) {
+        targetFolder = folders[0].uri;
+      } else {
+        // Not an AL project — ask user to pick the right folder
+        const choice = await vscode.window.showWarningMessage(
+          "The current workspace doesn't appear to be an AL project (no app.json found).",
+          "Select AL Project Folder",
+          "Use Current Folder Anyway",
+        );
+        if (choice === "Select AL Project Folder") {
+          const picked = await vscode.window.showOpenDialog({
+            canSelectFolders: true,
+            canSelectFiles: false,
+            canSelectMany: false,
+            openLabel: "Select AL project folder",
+            title: "Where should the launch.json be created?",
+          });
+          if (!picked || picked.length === 0) { return; }
+          targetFolder = picked[0];
+        } else if (choice === "Use Current Folder Anyway") {
+          targetFolder = folders[0].uri;
+        } else {
+          return; // cancelled
+        }
+      }
     } else {
       const picked = await vscode.window.showWorkspaceFolderPick({
         placeHolder: "Which workspace folder should get the launch.json?",
