@@ -17,6 +17,9 @@ e2e/**
 ui-tests/**
 out/e2e/**
 out/ui-tests/**
+out/screenshots/**
+screenshots/**/*.ts
+screenshots/tsconfig.json
 jest.config.js
 **/*.test.js
 **/*.test.ts
