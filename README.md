@@ -7,6 +7,8 @@
 > A lightweight, all-in-one control center for **Business Central Docker development** inside VS Code.
 > Browse artifacts, create containers, manage your environment, and develop AL apps - **without BcContainerHelper or Docker Desktop**.
 
+> **Note:** You must run VS Code as an **Administrator** for BC Docker Manager to work properly, as it requires elevated permissions for certain operations (e.g., networking, hosts file, Docker Engine setup).
+
 <!-- SCREENSHOT: Full VS Code window showing the BC Docker Manager sidebar (all sections expanded)
      with a running container visible and the Artifacts Explorer open in the editor area.
      Aim for 1280x800 or larger. Save as: screenshots/hero.png -->
