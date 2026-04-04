@@ -740,7 +740,6 @@
     "vscode-extension-tester": "^8.23.0"
   },
   "dependencies": {
-    "@vscode/extension-telemetry": "^1.5.1",
-    "sharp": "^0.34.5"
+    "@vscode/extension-telemetry": "^1.5.1"
   }
 }
