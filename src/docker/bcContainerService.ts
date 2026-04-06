@@ -10,6 +10,15 @@ const EXEC_TIMEOUT_MS = 120_000; // BC operations can be slow
 const BC_SERVER_INSTANCE = "BC";
 const CONTAINER_TEMP = "C:\\run\\my";
 
+/**
+ * Import the NAV/BC management module inside the container.
+ * Required because we use `-NoProfile` to avoid slow profile loading
+ * and unpredictable stdout. Covers both legacy NAV and modern BC paths.
+ */
+const NAV_MODULE_IMPORT =
+  "$navModule = Get-ChildItem 'C:\\Program Files\\Microsoft Dynamics*\\*\\Service\\NavAdminTool.ps1' -ErrorAction SilentlyContinue | Select-Object -First 1; " +
+  "if ($navModule) { Import-Module $navModule.FullName -DisableNameChecking -ErrorAction SilentlyContinue }; ";
+
 // ────────────────────────── Service ────────────────────────────
 
 /**
@@ -41,7 +50,7 @@ export class BcContainerService {
     psCommand: string,
     timeoutMs = EXEC_TIMEOUT_MS,
   ): Promise<string> {
-    const escaped = psCommand.replace(/"/g, '\\"');
+    const escaped = (NAV_MODULE_IMPORT + psCommand).replace(/"/g, '\\"');
     return this.exec(
       `docker exec ${containerName} powershell -NoProfile -Command "${escaped}"`,
       timeoutMs,
