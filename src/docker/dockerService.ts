@@ -67,7 +67,7 @@ const BC_IMAGE = "mcr.microsoft.com/businesscentral:ltsc2022";
  * Pure Docker CLI wrapper. No PowerShell modules, no external
  * frameworks — just `docker` commands parsed from JSON output.
  */
-export class DockerService {
+export class DockerService implements vscode.Disposable {
 
   /** Fires when background SWR revalidation produces updated data. */
   private readonly _onDidUpdate = new vscode.EventEmitter<void>();
@@ -80,6 +80,10 @@ export class DockerService {
     const notify = () => this._onDidUpdate.fire();
     this._containerCache = new SWRCache<DockerContainer[]>(10_000, notify);
     this._imageCache = new SWRCache<DockerImage[]>(10_000, notify);
+  }
+
+  dispose(): void {
+    this._onDidUpdate.dispose();
   }
 
   /** True if the last ensureNetworking() call actually ran a fix (UAC elevation). */
@@ -153,20 +157,13 @@ export class DockerService {
   }
 
   private async _fetchBcContainers(): Promise<DockerContainer[]> {
-    // Single docker ps call with Labels included for client-side filtering
-    const raw = await this.exec(
-      'docker ps -a --no-trunc --format "{{json .}}"'
-    );
-    const all = this.parseLinesWithLabelsHint(raw);
+    // Reuse the already-enriched "all" containers list — no second docker ps or docker inspect.
+    const all = await this.getContainers();
 
-    // Prefer label-filtered containers; fall back to image name heuristic
-    let containers = all.filter((c) => c._hasNavLabel);
+    // Prefer label-based detection (official BC images set a "nav" label).
+    let containers = all.filter((c) => "nav" in c.labels || c.labels["maintainer"] === "Dynamics SMB");
     if (containers.length === 0) {
       containers = all.filter((c) => this.looksLikeBcImage(c.image));
-    }
-
-    if (containers.length > 0) {
-      await this.enrichWithLabels(containers);
     }
     return containers;
   }
@@ -419,29 +416,6 @@ export class DockerService {
           id: obj["ID"] ?? "",
           size: obj["Size"] ?? "",
           createdAt: obj["CreatedAt"] ?? "",
-        };
-      });
-  }
-
-  /** Like parseLines but also extracts the raw Labels string for filtering. */
-  private parseLinesWithLabelsHint(raw: string): (DockerContainer & { _hasNavLabel: boolean })[] {
-    return raw
-      .trim()
-      .split("\n")
-      .filter(Boolean)
-      .map((line) => {
-        const obj = JSON.parse(line) as Record<string, string>;
-        const labelsRaw = obj["Labels"] ?? "";
-        return {
-          id: obj["ID"] ?? "",
-          names: obj["Names"] ?? "",
-          image: obj["Image"] ?? "",
-          status: obj["Status"] ?? "",
-          state: obj["State"] ?? "",
-          ports: obj["Ports"] ?? "",
-          createdAt: obj["CreatedAt"] ?? "",
-          labels: {},
-          _hasNavLabel: labelsRaw.includes("nav="),
         };
       });
   }

@@ -12,6 +12,7 @@ import { VolumeProvider } from "./tree/volumeProvider";
 import { RegistryPanel } from "./webview/registryPanel";
 import { ContainerTreeItem, ImageTreeItem } from "./tree/models";
 import { VolumeTreeItem } from "./tree/volumeProvider";
+import { ArtifactsLauncherProvider } from "./tree/artifactsLauncherProvider";
 import { initTelemetry, disposeTelemetry, sendEvent, sendError } from "./services/telemetry";
 
 /**
@@ -36,11 +37,15 @@ export async function activate(
   const imageProvider = new ImageProvider(docker);
   const healthProvider = new DockerHealthProvider();
   const volumeProvider = new VolumeProvider(bcService);
+  const artifactsLauncherProvider = new ArtifactsLauncherProvider();
 
   // Preload countries in background so the panel opens instantly.
   // This warms up the TLS connection + populates memory & disk cache.
   artifacts.getCountries("sandbox").catch(() => {});
   artifacts.getCountries("onprem").catch(() => {});
+
+  // Register DockerService for disposal so its EventEmitter is cleaned up.
+  context.subscriptions.push(docker);
 
   // ── Tree views ─────────────────────────────────────────────────
   context.subscriptions.push(
@@ -55,6 +60,9 @@ export async function activate(
     }),
     vscode.window.createTreeView("bcDockerManager-volumes", {
       treeDataProvider: volumeProvider,
+    }),
+    vscode.window.createTreeView("bcDockerManager-artifacts", {
+      treeDataProvider: artifactsLauncherProvider,
     }),
     healthProvider,
   );
@@ -97,8 +105,11 @@ export async function activate(
     })
   );
 
-  // Auto-open BC Artifacts Explorer on activation
-  RegistryPanel.show(artifacts, docker, context.extensionUri);
+  // Auto-open BC Artifacts Explorer on first install only.
+  if (!context.globalState.get<boolean>("bcDockerManager.hasAutoOpened")) {
+    context.globalState.update("bcDockerManager.hasAutoOpened", true);
+    RegistryPanel.show(artifacts, docker, context.extensionUri);
+  }
 
   // Diagnostic: test CDN connectivity from inside the extension host
   context.subscriptions.push(

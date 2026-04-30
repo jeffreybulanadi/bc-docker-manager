@@ -2,7 +2,7 @@
   "name": "bc-docker-manager",
   "displayName": "BC Docker Manager",
   "description": "Manage Business Central Docker containers from VS Code - browse artifacts, create containers, develop AL apps, and configure your environment without BcContainerHelper or Docker Desktop.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "icon": "resources/icon.png",
   "publisher": "jeffreybulanadi",
   "author": {
@@ -68,6 +68,11 @@
           "id": "bcDockerManager-volumes",
           "name": "Volumes",
           "icon": "$(database)"
+        },
+        {
+          "id": "bcDockerManager-artifacts",
+          "name": "BC Artifacts",
+          "icon": "$(globe)"
         }
       ]
     },
@@ -91,6 +96,10 @@
         "view": "bcDockerManager-volumes",
         "contents": "No volumes found.\n[Create Volume](command:bcDockerManager.createVolume)",
         "when": "bcDockerManager.dockerReady"
+      },
+      {
+        "view": "bcDockerManager-artifacts",
+        "contents": "Browse and download Business Central artifacts from Microsoft's CDN.\n\n[Open BC Artifacts Explorer](command:bcDockerManager.openExplorer)"
       }
     ],
     "configuration": {
@@ -476,6 +485,16 @@
         {
           "command": "bcDockerManager.createVolume",
           "when": "view == bcDockerManager-volumes",
+          "group": "navigation@2"
+        },
+        {
+          "command": "bcDockerManager.openExplorer",
+          "when": "view == bcDockerManager-artifacts",
+          "group": "navigation@1"
+        },
+        {
+          "command": "bcDockerManager.refreshRegistry",
+          "when": "view == bcDockerManager-artifacts",
           "group": "navigation@2"
         },
         {
