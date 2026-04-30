@@ -701,9 +701,60 @@ describe("DockerService.enrichWithLabels (additional cases)", () => {
   });
 });
 
-// ─── buildRunArgs (additional cases) ─────────────────────────────
+// ─── parseInitPhase ───────────────────────────────────────────────
 
-describe("DockerService.buildRunArgs (additional cases)", () => {
+describe("DockerService.parseInitPhase", () => {
+  it("returns 'Ready' for ready-for-connections lines", () => {
+    expect(DockerService.parseInitPhase("Ready for connections!")).toBe("Ready");
+    expect(DockerService.parseInitPhase("Container setup complete")).toBe("Ready");
+  });
+
+  it("returns 'Importing license' for license import lines", () => {
+    expect(DockerService.parseInitPhase("Importing license file...")).toBe("Importing license");
+  });
+
+  it("returns 'Starting BC service' for service startup lines", () => {
+    expect(DockerService.parseInitPhase("Starting NAV Service Tier")).toBe("Starting BC service");
+    expect(DockerService.parseInitPhase("Starting Business Central Service")).toBe("Starting BC service");
+  });
+
+  it("returns 'Installing Business Central' for installation lines", () => {
+    expect(DockerService.parseInitPhase("Install Business Central")).toBe("Installing Business Central");
+    expect(DockerService.parseInitPhase("installing bc components")).toBe("Installing Business Central");
+  });
+
+  it("returns 'Configuring SQL Server' for SQL configuration lines", () => {
+    expect(DockerService.parseInitPhase("Configuring SQL Server")).toBe("Configuring SQL Server");
+    expect(DockerService.parseInitPhase("Initializing SQL database")).toBe("Configuring SQL Server");
+  });
+
+  it("returns 'Downloading artifact' for artifact download lines", () => {
+    expect(DockerService.parseInitPhase("Downloading artifact from CDN")).toBe("Downloading artifact");
+    expect(DockerService.parseInitPhase("Pulling artifact...")).toBe("Downloading artifact");
+  });
+
+  it("returns 'Extracting artifact' for extraction lines", () => {
+    expect(DockerService.parseInitPhase("Extracting files...")).toBe("Extracting artifact");
+    expect(DockerService.parseInitPhase("Unpacking archive")).toBe("Extracting artifact");
+  });
+
+  it("returns 'Initializing' for generic init lines", () => {
+    expect(DockerService.parseInitPhase("Starting container runtime")).toBe("Initializing");
+    expect(DockerService.parseInitPhase("initializing environment")).toBe("Initializing");
+  });
+
+  it("returns null for unrelated log lines", () => {
+    expect(DockerService.parseInitPhase("")).toBeNull();
+    expect(DockerService.parseInitPhase("some unrelated log output")).toBeNull();
+    expect(DockerService.parseInitPhase("2024-01-01 00:00:00")).toBeNull();
+  });
+
+  it("is case insensitive", () => {
+    expect(DockerService.parseInitPhase("READY FOR CONNECTIONS!")).toBe("Ready");
+    expect(DockerService.parseInitPhase("DOWNLOADING ARTIFACT")).toBe("Downloading artifact");
+  });
+});
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const svc = new DockerService() as any;
 

@@ -28,6 +28,14 @@ function createMockArtifacts(): any {
   };
 }
 
+function createMockContainerProvider(): any {
+  return {
+    setContainerPhase: jest.fn(),
+    clearContainerPhase: jest.fn(),
+    refresh: jest.fn(),
+  };
+}
+
 function createMockDocker(): any {
   return {
     createBcContainer: jest.fn().mockResolvedValue(undefined),
@@ -91,7 +99,7 @@ describe("RegistryPanel.show", () => {
     const docker = createMockDocker();
     const uri = vscode.Uri.file("/ext");
 
-    RegistryPanel.show(artifacts, docker, uri);
+    RegistryPanel.show(artifacts, docker, createMockContainerProvider(), uri);
 
     expect(vscode.window.createWebviewPanel).toHaveBeenCalledTimes(1);
     expect(vscode.window.createWebviewPanel).toHaveBeenCalledWith(
@@ -110,8 +118,8 @@ describe("RegistryPanel.show", () => {
     const docker = createMockDocker();
     const uri = vscode.Uri.file("/ext");
 
-    RegistryPanel.show(artifacts, docker, uri);
-    RegistryPanel.show(artifacts, docker, uri);
+    RegistryPanel.show(artifacts, docker, createMockContainerProvider(), uri);
+    RegistryPanel.show(artifacts, docker, createMockContainerProvider(), uri);
 
     // Only one panel created, second call reveals
     expect(vscode.window.createWebviewPanel).toHaveBeenCalledTimes(1);
@@ -126,7 +134,7 @@ describe("RegistryPanel HTML generation", () => {
     const docker = createMockDocker();
     const uri = vscode.Uri.file("/ext");
 
-    RegistryPanel.show(artifacts, docker, uri);
+    RegistryPanel.show(artifacts, docker, createMockContainerProvider(), uri);
 
     const panelMock = (vscode.window.createWebviewPanel as jest.Mock).mock.results[0].value;
     const html: string = panelMock.webview.html;
@@ -150,7 +158,7 @@ describe("RegistryPanel failsafe init", () => {
     const docker = createMockDocker();
     const uri = vscode.Uri.file("/ext");
 
-    RegistryPanel.show(artifacts, docker, uri);
+    RegistryPanel.show(artifacts, docker, createMockContainerProvider(), uri);
 
     // Before timeout, no countries loaded
     expect(artifacts.getCountries).not.toHaveBeenCalled();
@@ -172,7 +180,7 @@ describe("RegistryPanel message handling", () => {
     const docker = createMockDocker();
     const uri = vscode.Uri.file("/ext");
 
-    RegistryPanel.show(artifacts, docker, uri);
+    RegistryPanel.show(artifacts, docker, createMockContainerProvider(), uri);
 
     const handler = getMessageHandler();
     expect(handler).toBeDefined();
@@ -187,7 +195,7 @@ describe("RegistryPanel message handling", () => {
     const docker = createMockDocker();
     const uri = vscode.Uri.file("/ext");
 
-    RegistryPanel.show(artifacts, docker, uri);
+    RegistryPanel.show(artifacts, docker, createMockContainerProvider(), uri);
 
     const handler = getMessageHandler();
     await handler({ command: "copyUrl", url: "https://cdn.example.com/test" });
@@ -201,7 +209,7 @@ describe("RegistryPanel message handling", () => {
     const docker = createMockDocker();
     const uri = vscode.Uri.file("/ext");
 
-    RegistryPanel.show(artifacts, docker, uri);
+    RegistryPanel.show(artifacts, docker, createMockContainerProvider(), uri);
 
     const handler = getMessageHandler();
     await handler({ command: "copyVersion", version: "27.0.0.1" });
@@ -214,7 +222,7 @@ describe("RegistryPanel message handling", () => {
     const docker = createMockDocker();
     const uri = vscode.Uri.file("/ext");
 
-    RegistryPanel.show(artifacts, docker, uri);
+    RegistryPanel.show(artifacts, docker, createMockContainerProvider(), uri);
 
     const handler = getMessageHandler();
     await handler({ command: "loadCountry", type: "onprem", country: "ca" });
@@ -229,7 +237,7 @@ describe("RegistryPanel message handling", () => {
     const docker = createMockDocker();
     const uri = vscode.Uri.file("/ext");
 
-    RegistryPanel.show(artifacts, docker, uri);
+    RegistryPanel.show(artifacts, docker, createMockContainerProvider(), uri);
 
     const handler = getMessageHandler();
     await handler({ command: "loadMajor", type: "sandbox", country: "us", major: 27 });
@@ -244,7 +252,7 @@ describe("RegistryPanel._sendChunk (pagination)", () => {
     const docker = createMockDocker();
     const uri = vscode.Uri.file("/ext");
 
-    RegistryPanel.show(artifacts, docker, uri);
+    RegistryPanel.show(artifacts, docker, createMockContainerProvider(), uri);
 
     // Pre-populate cache directly
     const instance = (RegistryPanel as any)._instance;
@@ -270,7 +278,7 @@ describe("RegistryPanel._sendChunk (pagination)", () => {
     const docker = createMockDocker();
     const uri = vscode.Uri.file("/ext");
 
-    RegistryPanel.show(artifacts, docker, uri);
+    RegistryPanel.show(artifacts, docker, createMockContainerProvider(), uri);
 
     const handler = getMessageHandler();
     const postMock = (vscode.window.createWebviewPanel as jest.Mock).mock.results[0].value.webview.postMessage;
@@ -289,7 +297,7 @@ describe("RegistryPanel.dispose", () => {
     const docker = createMockDocker();
     const uri = vscode.Uri.file("/ext");
 
-    RegistryPanel.show(artifacts, docker, uri);
+    RegistryPanel.show(artifacts, docker, createMockContainerProvider(), uri);
 
     expect((RegistryPanel as any)._instance).toBeDefined();
 
@@ -306,7 +314,7 @@ describe("RegistryPanel error handling", () => {
     const docker = createMockDocker();
     const uri = vscode.Uri.file("/ext");
 
-    RegistryPanel.show(artifacts, docker, uri);
+    RegistryPanel.show(artifacts, docker, createMockContainerProvider(), uri);
 
     const handler = getMessageHandler();
     await handler({ command: "ready" });
@@ -323,7 +331,7 @@ describe("RegistryPanel error handling", () => {
     const docker = createMockDocker();
     const uri = vscode.Uri.file("/ext");
 
-    RegistryPanel.show(artifacts, docker, uri);
+    RegistryPanel.show(artifacts, docker, createMockContainerProvider(), uri);
 
     const handler = getMessageHandler();
     await handler({ command: "loadMajor", type: "sandbox", country: "us", major: 27 });

@@ -7,6 +7,20 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.3.0] - 2025-05-01
+
+### Added
+- Phase-aware progress during container initialization. The VS Code notification and the sidebar both show the current BC initialization phase (Downloading artifact, Installing prerequisites, Configuring SQL Server, Importing license, Installing Business Central, Ready) as the container starts up.
+- Immediate sidebar placeholder. A spinning placeholder item appears the moment you start container creation, before Docker even reports the container exists. Previously the sidebar showed nothing for up to 5 minutes.
+- Phase overlay on real containers. Once Docker reports the container, the placeholder is replaced by a real container item with the current phase shown as its description and a spinner icon. The icon and description clear automatically when the container is ready.
+- Cancellation support. The initialization progress toast now has a Cancel button. Clicking it stops the health-check loop and removes the container with `docker rm -f`, then clears the sidebar placeholder. Previously there was no way to abort a stuck initialization.
+- Completion toast with quick actions. When initialization finishes, a notification appears with two buttons: "Open BC Web Client" opens the BC login page directly, and "Generate launch.json" creates the AL project configuration.
+
+### Changed
+- Container initialization progress is now driven by the phase-change callback (`onPhase`) instead of a fixed 30-second interval. The sidebar and notification update every time a new phase is detected in the container logs, so progress is shown as fast as the container reports it.
+
+---
+
 ## [1.2.2] - 2026-04-30
 
 ### Fixed

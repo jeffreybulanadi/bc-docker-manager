@@ -71,7 +71,28 @@ export class ContainerTreeItem extends vscode.TreeItem {
   }
 }
 
-// ──────────────────────── Image Tree Item ──────────────────────
+// ──────────────────────── Initializing Container Tree Item ────
+
+/**
+ * A placeholder tree node shown while a container is being created.
+ * Displayed from the moment creation starts until the container is
+ * confirmed ready, giving the user immediate visual feedback.
+ */
+export class InitializingContainerTreeItem extends vscode.TreeItem {
+  constructor(
+    public readonly containerName: string,
+    public readonly phase: string,
+  ) {
+    super(containerName, vscode.TreeItemCollapsibleState.None);
+
+    this.contextValue = "initializingContainer";
+    this.iconPath = new vscode.ThemeIcon("loading~spin");
+    this.description = phase;
+    this.tooltip = new vscode.MarkdownString(
+      `**${containerName}**\n\nInitializing: ${phase}`,
+    );
+  }
+}
 
 /**
  * A tree node representing one Docker image.

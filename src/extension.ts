@@ -95,20 +95,20 @@ export async function activate(
   context.subscriptions.push(
     vscode.commands.registerCommand("bcDockerManager.refreshRegistry", () => {
       // Re-open the explorer (it will reload data)
-      RegistryPanel.show(artifacts, docker, context.extensionUri);
+      RegistryPanel.show(artifacts, docker, containerProvider, context.extensionUri);
     })
   );
 
   context.subscriptions.push(
     vscode.commands.registerCommand("bcDockerManager.openExplorer", () => {
-      RegistryPanel.show(artifacts, docker, context.extensionUri);
+      RegistryPanel.show(artifacts, docker, containerProvider, context.extensionUri);
     })
   );
 
   // Auto-open BC Artifacts Explorer on first install only.
   if (!context.globalState.get<boolean>("bcDockerManager.hasAutoOpened")) {
     context.globalState.update("bcDockerManager.hasAutoOpened", true);
-    RegistryPanel.show(artifacts, docker, context.extensionUri);
+    RegistryPanel.show(artifacts, docker, containerProvider, context.extensionUri);
   }
 
   // Diagnostic: test CDN connectivity from inside the extension host

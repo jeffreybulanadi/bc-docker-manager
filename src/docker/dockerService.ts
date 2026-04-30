@@ -439,6 +439,35 @@ export class DockerService implements vscode.Disposable {
     return lower.includes("businesscentral") || DockerService.BC_IMAGE_REGEX.test(lower);
   }
 
+  /**
+   * Maps known BC entrypoint log patterns to concise human-readable phase labels.
+   * Ordered from most-specific to least-specific so the first match wins.
+   */
+  private static readonly _INIT_PHASE_PATTERNS: ReadonlyArray<{ readonly test: RegExp; readonly phase: string }> = [
+    { test: /ready for connections|container setup complete/i,            phase: "Ready" },
+    { test: /importing license/i,                                         phase: "Importing license" },
+    { test: /starting.*nav service|starting.*business central service/i,  phase: "Starting BC service" },
+    { test: /install.*business|install.*nav|installing.*bc/i,             phase: "Installing Business Central" },
+    { test: /starting sql|sql server.*started|sql server.*running/i,      phase: "Starting SQL Server" },
+    { test: /configur.*sql|initializ.*sql|setting up sql/i,               phase: "Configuring SQL Server" },
+    { test: /install.*sql|deploying sql/i,                                phase: "Installing SQL Server" },
+    { test: /downloading artifact|pulling artifact/i,                     phase: "Downloading artifact" },
+    { test: /extracting|unpacking/i,                                      phase: "Extracting artifact" },
+    { test: /install.*prereq|copying files/i,                             phase: "Installing prerequisites" },
+    { test: /starting container|initializ/i,                              phase: "Initializing" },
+  ];
+
+  /**
+   * Parse a single BC entrypoint log line into a concise phase label.
+   * Returns null if the line does not match any known phase pattern.
+   */
+  static parseInitPhase(line: string): string | null {
+    for (const { test, phase } of DockerService._INIT_PHASE_PATTERNS) {
+      if (test.test(line)) { return phase; }
+    }
+    return null;
+  }
+
   // ── BC container creation (native docker run) ────────────────
 
   /**
@@ -520,19 +549,31 @@ export class DockerService implements vscode.Disposable {
    *
    * Also streams log snippets to the output channel so the user can
    * see what phase the initialisation is in.
+   *
+   * @param onPhase  Called on every poll with the current phase label.
+   *                 Use this to drive progress notifications or sidebar updates.
+   * @param token    Cancellation token. When cancelled, the loop exits immediately
+   *                 and returns false. Caller is responsible for cleanup.
    */
   async waitForContainerReady(
     containerName: string,
     output?: vscode.OutputChannel,
     timeoutMs = 1_800_000,  // 30 minutes max (large artifacts can take 20+ min)
     pollMs = 10_000,        // check every 10s
+    onPhase?: (phase: string) => void,
+    token?: vscode.CancellationToken,
   ): Promise<boolean> {
     const log = (msg: string) => output?.appendLine(msg);
     const start = Date.now();
     let lastLogLine = "";
+    let currentPhase = "Initializing...";
 
     while (Date.now() - start < timeoutMs) {
+      if (token?.isCancellationRequested) { return false; }
+
       await new Promise((r) => setTimeout(r, pollMs));
+
+      if (token?.isCancellationRequested) { return false; }
 
       // Check container state + health in one shot
       try {
@@ -544,13 +585,14 @@ export class DockerService implements vscode.Disposable {
         const [state, health] = raw.trim().split("|");
 
         if (health === "healthy") {
-          log?.(`\n✓ Container "${containerName}" is ready!`);
+          log?.(`\nDone: Container "${containerName}" is ready.`);
+          onPhase?.("Ready");
           return true;
         }
 
         // Container exited before becoming healthy
         if (state === "exited" || state === "dead") {
-          log?.(`\n✗ Container "${containerName}" ${state} unexpectedly.`);
+          log?.(`\nError: Container "${containerName}" ${state} unexpectedly.`);
           return false;
         }
 
@@ -564,7 +606,8 @@ export class DockerService implements vscode.Disposable {
               5_000,
             );
             if (tailRaw.includes("Ready for connections!") || tailRaw.includes("Container setup complete")) {
-              log?.(`\n✓ Container "${containerName}" is ready! (detected from logs)`);
+              log?.(`\nDone: Container "${containerName}" is ready. (detected from logs)`);
+              onPhase?.("Ready");
               return true;
             }
           } catch { /* ignore */ }
@@ -584,11 +627,15 @@ export class DockerService implements vscode.Disposable {
           lastLogLine = line;
           const elapsed = Math.round((Date.now() - start) / 1000);
           log?.(`[${elapsed}s] ${line}`);
+          const detected = DockerService.parseInitPhase(line);
+          if (detected) { currentPhase = detected; }
         }
       } catch { /* container may not exist yet */ }
+
+      onPhase?.(currentPhase);
     }
 
-    log?.(`\n✗ Timed out waiting for "${containerName}" to become healthy (${Math.round(timeoutMs / 60_000)} min).`);
+    log?.(`\nError: Timed out waiting for "${containerName}" to become healthy (${Math.round(timeoutMs / 60_000)} min).`);
     return false;
   }
 
