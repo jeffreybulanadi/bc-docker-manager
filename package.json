@@ -60,6 +60,12 @@
           "icon": "$(server)"
         },
         {
+          "id": "bcDockerManager-artifacts",
+          "name": "BC Artifacts",
+          "icon": "$(globe)",
+          "visibility": "visible"
+        },
+        {
           "id": "bcDockerManager-images",
           "name": "Local Images",
           "icon": "$(package)"
@@ -68,12 +74,6 @@
           "id": "bcDockerManager-volumes",
           "name": "Volumes",
           "icon": "$(database)"
-        },
-        {
-          "id": "bcDockerManager-artifacts",
-          "name": "BC Artifacts",
-          "icon": "$(globe)",
-          "visibility": "visible"
         }
       ]
     },
