@@ -234,3 +234,77 @@ describe("ContainerProvider.getChildren — mixed states", () => {
     expect(children[1].contextValue).toBe("stoppedContainer");
   });
 });
+
+// ─── setContainerPhase / clearContainerPhase ─────────────────────
+
+import { InitializingContainerTreeItem } from "./models";
+
+describe("ContainerProvider.setContainerPhase", () => {
+  it("fires onDidChangeTreeData when a phase is set", () => {
+    const mockDocker = createMockDocker();
+    const provider = new ContainerProvider(mockDocker);
+
+    provider.setContainerPhase("newbc", "Starting...");
+
+    expect((provider as any)._onDidChangeTreeData.fire).toHaveBeenCalled();
+  });
+
+  it("stores the phase so getChildren returns a placeholder for unknown containers", async () => {
+    const mockDocker = createMockDocker();
+    (mockDocker.getBcContainers as jest.Mock).mockResolvedValue([]); // no containers in Docker yet
+    const provider = new ContainerProvider(mockDocker);
+
+    provider.setContainerPhase("newbc", "Initializing");
+
+    const children = await provider.getChildren();
+
+    expect(children).toHaveLength(1);
+    expect(children[0]).toBeInstanceOf(InitializingContainerTreeItem);
+    expect((children[0] as InitializingContainerTreeItem).containerName).toBe("newbc");
+    expect((children[0] as InitializingContainerTreeItem).phase).toBe("Initializing");
+  });
+
+  it("overlays phase on a real container when it appears in Docker", async () => {
+    // Container is in Docker (names has leading slash) AND in _initializingContainers
+    const mockDocker = createMockDocker();
+    (mockDocker.getBcContainers as jest.Mock).mockResolvedValue([
+      { ...sampleContainer, names: "/mybc" },
+    ]);
+    const provider = new ContainerProvider(mockDocker);
+    provider.setContainerPhase("mybc", "Installing Business Central");
+
+    const children = await provider.getChildren();
+
+    // No placeholder - real item exists
+    expect(children).toHaveLength(1);
+    expect(children[0]).toBeInstanceOf(ContainerTreeItem);
+    expect(children[0].description).toBe("Installing Business Central");
+  });
+});
+
+describe("ContainerProvider.clearContainerPhase", () => {
+  it("fires onDidChangeTreeData when phase is cleared", () => {
+    const mockDocker = createMockDocker();
+    const provider = new ContainerProvider(mockDocker);
+
+    provider.setContainerPhase("newbc", "Starting...");
+    (provider as any)._onDidChangeTreeData.fire.mockClear();
+
+    provider.clearContainerPhase("newbc");
+
+    expect((provider as any)._onDidChangeTreeData.fire).toHaveBeenCalled();
+  });
+
+  it("removes placeholder from getChildren after phase is cleared", async () => {
+    const mockDocker = createMockDocker();
+    (mockDocker.getBcContainers as jest.Mock).mockResolvedValue([]);
+    const provider = new ContainerProvider(mockDocker);
+
+    provider.setContainerPhase("newbc", "Initializing");
+    provider.clearContainerPhase("newbc");
+
+    const children = await provider.getChildren();
+
+    expect(children).toHaveLength(0);
+  });
+});

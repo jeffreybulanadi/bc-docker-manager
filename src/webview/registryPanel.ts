@@ -7,6 +7,7 @@ import {
 import { DockerService } from "../docker/dockerService";
 import { DockerSetup } from "../docker/dockerSetup";
 import { LaunchJsonService } from "../docker/launchJsonService";
+import { ContainerProvider } from "../tree/containerProvider";
 
 
 /**
@@ -26,6 +27,7 @@ export class RegistryPanel {
   private readonly _panel: vscode.WebviewPanel;
   private readonly _artifacts: BcArtifactsService;
   private readonly _docker: DockerService;
+  private readonly _containerProvider: ContainerProvider;
   private readonly _extensionUri: vscode.Uri;
   private _disposables: vscode.Disposable[] = [];
 
@@ -40,11 +42,13 @@ export class RegistryPanel {
     panel: vscode.WebviewPanel,
     artifacts: BcArtifactsService,
     docker: DockerService,
+    containerProvider: ContainerProvider,
     extensionUri: vscode.Uri,
   ) {
     this._panel = panel;
     this._artifacts = artifacts;
     this._docker = docker;
+    this._containerProvider = containerProvider;
     this._extensionUri = extensionUri;
 
     this._panel.webview.onDidReceiveMessage(
@@ -69,6 +73,7 @@ export class RegistryPanel {
   public static show(
     artifacts: BcArtifactsService,
     docker: DockerService,
+    containerProvider: ContainerProvider,
     extensionUri: vscode.Uri,
   ): void {
     if (RegistryPanel._instance) {
@@ -87,7 +92,7 @@ export class RegistryPanel {
       },
     );
 
-    RegistryPanel._instance = new RegistryPanel(panel, artifacts, docker, extensionUri);
+    RegistryPanel._instance = new RegistryPanel(panel, artifacts, docker, containerProvider, extensionUri);
   }
 
   public dispose(): void {
@@ -110,6 +115,7 @@ export class RegistryPanel {
         await this._handleLoadCountry(
           msg.type as BcArtifactType,
           msg.country as string | undefined,
+          typeof msg.major === "number" ? msg.major : undefined,
         );
         break;
 
@@ -210,6 +216,9 @@ export class RegistryPanel {
     const output = vscode.window.createOutputChannel("BC Container Creation");
     output.show(true);
 
+    // Show placeholder immediately in the sidebar so the user sees "something happening"
+    this._containerProvider.setContainerPhase(name, "Starting...");
+
     try {
       // Phase 1: Pull image with real-time progress
       await vscode.window.withProgress(
@@ -234,19 +243,54 @@ export class RegistryPanel {
         ),
       );
 
-      // Phase 2: Wait for the container to fully initialize
+      // 5 s after docker run returns the container is visible in `docker ps`.
+      // Trigger one early tree refresh to flip the placeholder to a real item.
+      setTimeout(
+        () => vscode.commands.executeCommand("bcDockerManager.refresh"),
+        5_000,
+      );
+
+      // Phase 2: Wait for the container to fully initialize.
+      // The progress toast is cancellable: cancelling sends a CancellationToken
+      // into waitForContainerReady which exits the polling loop, then we clean up.
+      let cancelled = false;
       const containerReady = await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: `Initializing container "${name}"`,
-          cancellable: false,
+          title: `Initializing "${name}"`,
+          cancellable: true,
         },
-        async (progress) => {
-          progress.report({ message: "Downloading artifacts and installing BC (5-15 min)..." });
-          return this._docker.waitForContainerReady(name, output);
+        async (progress, token) => {
+          progress.report({ message: "Downloading artifacts and installing BC..." });
+
+          return this._docker.waitForContainerReady(
+            name,
+            output,
+            1_800_000,
+            10_000,
+            (phase) => {
+              progress.report({ message: phase });
+              this._containerProvider.setContainerPhase(name, phase);
+            },
+            token,
+          ).then((result) => {
+            if (token.isCancellationRequested) { cancelled = true; }
+            return result;
+          });
         },
       );
 
+      if (cancelled) {
+        output.appendLine(`\nCancelled by user. Removing container "${name}"...`);
+        await this._docker.removeContainer(name);
+        this._containerProvider.clearContainerPhase(name);
+        vscode.commands.executeCommand("bcDockerManager.refresh");
+        vscode.window.showInformationMessage(`Container creation cancelled. "${name}" has been removed.`);
+        return;
+      }
+
+      // Phase complete - clear the initializing state
+      this._containerProvider.clearContainerPhase(name);
       vscode.commands.executeCommand("bcDockerManager.refresh");
 
       if (!containerReady) {
@@ -255,8 +299,6 @@ export class RegistryPanel {
       }
 
       // Always setup networking (hosts + SSL cert) regardless of health check result.
-      // The container's web server may still be starting, but the cert endpoint
-      // (port 8080) and the NAT IP are available as soon as the container is running.
       output.appendLine(`\nSetting up networking (hosts file + SSL certificate)...`);
       const netOk = await this._docker.setupContainerNetworking(name);
       if (!netOk) {
@@ -266,19 +308,39 @@ export class RegistryPanel {
         output.appendLine(`Networking configured successfully.`);
       }
 
-      // Offer to generate AL launch.json
-      const genLaunch = await vscode.window.showInformationMessage(
-        `Generate an AL launch.json to connect to "${name}"?`,
+      // Toast notification with quick-open action
+      const action = await vscode.window.showInformationMessage(
+        `Container "${name}" is ready.`,
+        "Open BC Web Client",
         "Generate launch.json",
-        "Skip",
       );
-      if (genLaunch === "Generate launch.json") {
+
+      if (action === "Open BC Web Client") {
+        vscode.env.openExternal(vscode.Uri.parse(`https://${name}/BC/`));
+      } else if (action === "Generate launch.json") {
         await LaunchJsonService.generate({
           containerName: name,
           authentication: "UserPassword",
         });
       }
+
+      // Also offer launch.json if the user dismissed the toast
+      if (!action) {
+        const genLaunch = await vscode.window.showInformationMessage(
+          `Generate an AL launch.json to connect to "${name}"?`,
+          "Generate launch.json",
+          "Skip",
+        );
+        if (genLaunch === "Generate launch.json") {
+          await LaunchJsonService.generate({
+            containerName: name,
+            authentication: "UserPassword",
+          });
+        }
+      }
     } catch (err) {
+      this._containerProvider.clearContainerPhase(name);
+      vscode.commands.executeCommand("bcDockerManager.refresh");
       const errMsg = err instanceof Error ? err.message : String(err);
       output.appendLine(`\nERROR: ${errMsg}`);
       vscode.window.showErrorMessage(`Failed to create container: ${errMsg}`);
@@ -302,12 +364,44 @@ export class RegistryPanel {
   private async _handleLoadCountry(
     type: BcArtifactType,
     country?: string,
+    major?: number,
   ): Promise<void> {
     try {
       const countries = await this._artifacts.getCountries(type);
       this._post({ command: "countries", type, countries });
 
       const target = country || (countries.includes("us") ? "us" : countries[0] || "w1");
+
+      if (major !== undefined) {
+        // Sticky-major path: user changed country while a specific major was
+        // selected. Fetch the major version list and the major-specific versions
+        // in parallel to keep latency as low as a single-major load.
+        const [majors, versions] = await Promise.all([
+          this._artifacts.getMajorVersions(type, target),
+          this._artifacts.getVersionsByMajor(type, target, major),
+        ]);
+
+        this._post({ command: "majorVersions", majors });
+
+        if (versions.length === 0) {
+          // The selected major does not exist in this country. Let the webview
+          // know so it can reset the filter dropdown and fall back to the normal
+          // paginated view — which we then send immediately after.
+          this._post({ command: "majorNotFound", major });
+          await this._loadVersions(type, target);
+        } else {
+          this._post({
+            command: "majorVersions_data",
+            type,
+            country: target,
+            major,
+            versions: versions.map(serializeVersion),
+            totalCount: versions.length,
+          });
+        }
+        return;
+      }
+
       await this._loadVersions(type, target);
     } catch (err) {
       this._post({

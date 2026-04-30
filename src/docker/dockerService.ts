@@ -146,26 +146,36 @@ export class DockerService implements vscode.Disposable {
   /**
    * List only Business Central containers.
    *
-   * Detection strategy (same as the official BcContainerHelper):
-   *  1. `docker ps --filter "label=nav"` — every official BC image
-   *     sets a `nav` label with the BC version string.
-   *  2. Fallback: image-name heuristic (matches "businesscentral"
-   *     anywhere in the name, or "bc" as a delimited segment).
+   * Detection strategy - a container is classified as BC if ANY of the
+   * following are true (checked in a single pass):
+   *  1. Label `nav` is present - set on official BC images by Microsoft.
+   *  2. Label `maintainer` equals "Dynamics SMB" - set on official BC images.
+   *  3. Image name matches the BC heuristic ("businesscentral" substring or
+   *     "bc" as a delimited segment) - catches containers created by this
+   *     extension before BC initialisation stamps its own labels.
+   *
+   * All three checks are applied inclusively so that extension-created
+   * containers (which start as the generic base image without labels) are
+   * visible in the BC filter from the moment they appear in `docker ps`.
    */
   async getBcContainers(): Promise<DockerContainer[]> {
     return this._containerCache.get("bc", () => this._fetchBcContainers());
   }
 
   private async _fetchBcContainers(): Promise<DockerContainer[]> {
-    // Reuse the already-enriched "all" containers list — no second docker ps or docker inspect.
+    // Reuse the already-enriched "all" containers list - no second docker ps or docker inspect.
     const all = await this.getContainers();
 
-    // Prefer label-based detection (official BC images set a "nav" label).
-    let containers = all.filter((c) => "nav" in c.labels || c.labels["maintainer"] === "Dynamics SMB");
-    if (containers.length === 0) {
-      containers = all.filter((c) => this.looksLikeBcImage(c.image));
-    }
-    return containers;
+    // Inclusive detection: label check OR image-name heuristic in a single O(n) pass.
+    // Using an exclusive fallback (only check image name when no labelled containers exist)
+    // caused extension-created containers to vanish from the BC view whenever any other
+    // labelled BC container was already running.
+    return all.filter(
+      (c) =>
+        "nav" in c.labels ||
+        c.labels["maintainer"] === "Dynamics SMB" ||
+        this.looksLikeBcImage(c.image),
+    );
   }
 
   async startContainer(id: string): Promise<void> {
@@ -429,6 +439,35 @@ export class DockerService implements vscode.Disposable {
     return lower.includes("businesscentral") || DockerService.BC_IMAGE_REGEX.test(lower);
   }
 
+  /**
+   * Maps known BC entrypoint log patterns to concise human-readable phase labels.
+   * Ordered from most-specific to least-specific so the first match wins.
+   */
+  private static readonly _INIT_PHASE_PATTERNS: ReadonlyArray<{ readonly test: RegExp; readonly phase: string }> = [
+    { test: /ready for connections|container setup complete/i,            phase: "Ready" },
+    { test: /importing license/i,                                         phase: "Importing license" },
+    { test: /starting.*nav service|starting.*business central service/i,  phase: "Starting BC service" },
+    { test: /install.*business|install.*nav|installing.*bc/i,             phase: "Installing Business Central" },
+    { test: /starting sql|sql server.*started|sql server.*running/i,      phase: "Starting SQL Server" },
+    { test: /configur.*sql|initializ.*sql|setting up sql/i,               phase: "Configuring SQL Server" },
+    { test: /install.*sql|deploying sql/i,                                phase: "Installing SQL Server" },
+    { test: /downloading artifact|pulling artifact/i,                     phase: "Downloading artifact" },
+    { test: /extracting|unpacking/i,                                      phase: "Extracting artifact" },
+    { test: /install.*prereq|copying files/i,                             phase: "Installing prerequisites" },
+    { test: /starting container|initializ/i,                              phase: "Initializing" },
+  ];
+
+  /**
+   * Parse a single BC entrypoint log line into a concise phase label.
+   * Returns null if the line does not match any known phase pattern.
+   */
+  static parseInitPhase(line: string): string | null {
+    for (const { test, phase } of DockerService._INIT_PHASE_PATTERNS) {
+      if (test.test(line)) { return phase; }
+    }
+    return null;
+  }
+
   // ── BC container creation (native docker run) ────────────────
 
   /**
@@ -510,19 +549,31 @@ export class DockerService implements vscode.Disposable {
    *
    * Also streams log snippets to the output channel so the user can
    * see what phase the initialisation is in.
+   *
+   * @param onPhase  Called on every poll with the current phase label.
+   *                 Use this to drive progress notifications or sidebar updates.
+   * @param token    Cancellation token. When cancelled, the loop exits immediately
+   *                 and returns false. Caller is responsible for cleanup.
    */
   async waitForContainerReady(
     containerName: string,
     output?: vscode.OutputChannel,
     timeoutMs = 1_800_000,  // 30 minutes max (large artifacts can take 20+ min)
     pollMs = 10_000,        // check every 10s
+    onPhase?: (phase: string) => void,
+    token?: vscode.CancellationToken,
   ): Promise<boolean> {
     const log = (msg: string) => output?.appendLine(msg);
     const start = Date.now();
     let lastLogLine = "";
+    let currentPhase = "Initializing...";
 
     while (Date.now() - start < timeoutMs) {
+      if (token?.isCancellationRequested) { return false; }
+
       await new Promise((r) => setTimeout(r, pollMs));
+
+      if (token?.isCancellationRequested) { return false; }
 
       // Check container state + health in one shot
       try {
@@ -534,13 +585,14 @@ export class DockerService implements vscode.Disposable {
         const [state, health] = raw.trim().split("|");
 
         if (health === "healthy") {
-          log?.(`\n✓ Container "${containerName}" is ready!`);
+          log?.(`\nDone: Container "${containerName}" is ready.`);
+          onPhase?.("Ready");
           return true;
         }
 
         // Container exited before becoming healthy
         if (state === "exited" || state === "dead") {
-          log?.(`\n✗ Container "${containerName}" ${state} unexpectedly.`);
+          log?.(`\nError: Container "${containerName}" ${state} unexpectedly.`);
           return false;
         }
 
@@ -554,7 +606,8 @@ export class DockerService implements vscode.Disposable {
               5_000,
             );
             if (tailRaw.includes("Ready for connections!") || tailRaw.includes("Container setup complete")) {
-              log?.(`\n✓ Container "${containerName}" is ready! (detected from logs)`);
+              log?.(`\nDone: Container "${containerName}" is ready. (detected from logs)`);
+              onPhase?.("Ready");
               return true;
             }
           } catch { /* ignore */ }
@@ -574,11 +627,15 @@ export class DockerService implements vscode.Disposable {
           lastLogLine = line;
           const elapsed = Math.round((Date.now() - start) / 1000);
           log?.(`[${elapsed}s] ${line}`);
+          const detected = DockerService.parseInitPhase(line);
+          if (detected) { currentPhase = detected; }
         }
       } catch { /* container may not exist yet */ }
+
+      onPhase?.(currentPhase);
     }
 
-    log?.(`\n✗ Timed out waiting for "${containerName}" to become healthy (${Math.round(timeoutMs / 60_000)} min).`);
+    log?.(`\nError: Timed out waiting for "${containerName}" to become healthy (${Math.round(timeoutMs / 60_000)} min).`);
     return false;
   }
 
@@ -615,6 +672,9 @@ export class DockerService implements vscode.Disposable {
       "-e", `username=${opts.username}`,
       "-e", `password=${opts.password}`,
       "-e", `auth=${opts.auth || "UserPassword"}`,
+      // Stamp a "nav" label so this container is immediately recognised by
+      // the BC filter without waiting for BC initialisation to set its own labels.
+      "--label", "nav=extension-created",
     ];
 
     if (opts.accept_outdated) {

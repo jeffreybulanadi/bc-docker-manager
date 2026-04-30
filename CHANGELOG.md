@@ -7,6 +7,41 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.3.1] - 2025-05-01
+
+### Fixed
+- Changing country while a specific BC major version (e.g. BC25) was selected showed 0 results. The filter state was reset on country change but the major dropdown kept its previous selection, causing the client-side major filter to exclude all rows returned by the unfiltered `getLatestVersions` fetch (which returns the most recent N versions, typically a different major). The extension now passes the selected major with the country-change request and fetches `getMajorVersions` and `getVersionsByMajor` in parallel, returning the major-specific results directly. If the selected major has no releases in the new country, the extension sends a `majorNotFound` signal so the frontend resets the filter to show all versions.
+- Changing the artifact tab (Sandbox vs OnPrem) while a major was selected could produce 0 results for the same reason. The tab change handler now resets the major dropdown to "All" before loading, since a tab switch is an explicit context change rather than a cross-country comparison.
+- Country dropdown was rebuilt from scratch on every `countries` message without restoring the previously selected value. The selection is now preserved using the same pattern as the major dropdown.
+
+---
+
+
+
+## [1.3.0] - 2025-05-01
+
+### Added
+- Phase-aware progress during container initialization. The VS Code notification and the sidebar both show the current BC initialization phase (Downloading artifact, Installing prerequisites, Configuring SQL Server, Importing license, Installing Business Central, Ready) as the container starts up.
+- Immediate sidebar placeholder. A spinning placeholder item appears the moment you start container creation, before Docker even reports the container exists. Previously the sidebar showed nothing for up to 5 minutes.
+- Phase overlay on real containers. Once Docker reports the container, the placeholder is replaced by a real container item with the current phase shown as its description and a spinner icon. The icon and description clear automatically when the container is ready.
+- Cancellation support. The initialization progress toast now has a Cancel button. Clicking it stops the health-check loop and removes the container with `docker rm -f`, then clears the sidebar placeholder. Previously there was no way to abort a stuck initialization.
+- Completion toast with quick actions. When initialization finishes, a notification appears with two buttons: "Open BC Web Client" opens the BC login page directly, and "Generate launch.json" creates the AL project configuration.
+
+### Changed
+- Container initialization progress is now driven by the phase-change callback (`onPhase`) instead of a fixed 30-second interval. The sidebar and notification update every time a new phase is detected in the container logs, so progress is shown as fast as the container reports it.
+
+---
+
+## [1.2.2] - 2026-04-30
+
+### Fixed
+- Containers created via the extension were not visible when the BC filter was active. The filter used an exclusive fallback: it checked Docker labels (`nav`, `maintainer`) first, and only fell back to the image-name heuristic when zero labelled containers existed. Containers created by this extension use the generic `mcr.microsoft.com/businesscentral:ltsc2022` base image, which carries no labels until BC finishes initialisation. If any other labelled BC container was already running, the new container was silently excluded from the BC view. Reported in [#5](https://github.com/jeffreybulanadi/bc-docker-manager/issues/5), confirmed by `@kennetlindberg`.
+- The filter is now inclusive: all three signals (label `nav`, label `maintainer=Dynamics SMB`, image-name heuristic) are evaluated in a single O(n) pass. A container matching any one signal appears in the BC view.
+- The `docker run` command now stamps `--label nav=extension-created` on every container created by the extension so it is recognised immediately, even before BC initialisation completes.
+- The container tree now refreshes 5 seconds after creation starts (so the container appears while BC is still initialising), then every 30 seconds throughout the initialisation process so the tree stays current. Previously the tree only refreshed after BC was fully ready (5-15 minutes later).
+
+---
+
 ## [1.2.1] - 2026-04-30
 
 ### Fixed
