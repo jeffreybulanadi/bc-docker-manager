@@ -342,3 +342,84 @@ describe("RegistryPanel error handling", () => {
     expect((errMsg as any).message).toBe("CDN timeout");
   });
 });
+
+// ─── Sticky major: loadCountry with major param ──────────────────
+
+describe("RegistryPanel sticky major (loadCountry with major)", () => {
+  it("sends majorVersions_data when major versions exist in the new country", async () => {
+    const artifacts = createMockArtifacts();
+    artifacts.getVersionsByMajor.mockResolvedValue([makeVersion("25.0.0.0")]);
+    const docker = createMockDocker();
+    const uri = vscode.Uri.file("/ext");
+
+    RegistryPanel.show(artifacts, docker, createMockContainerProvider(), uri);
+
+    const handler = getMessageHandler();
+    await handler({ command: "loadCountry", type: "sandbox", country: "ca", major: 25 });
+
+    const messages = getPostedMessages();
+    // Must send majorVersions (dropdown data) first
+    expect(messages.find((m) => m.command === "majorVersions")).toBeDefined();
+    // Must send majorVersions_data with the filtered rows
+    const data = messages.find((m) => m.command === "majorVersions_data");
+    expect(data).toBeDefined();
+    expect((data as any).country).toBe("ca");
+    expect((data as any).major).toBe(25);
+    expect((data as any).versions).toHaveLength(1);
+    // Must NOT send a plain versions command
+    expect(messages.find((m) => m.command === "versions")).toBeUndefined();
+  });
+
+  it("sends majorNotFound and falls back to versions when major is absent in new country", async () => {
+    const artifacts = createMockArtifacts();
+    artifacts.getVersionsByMajor.mockResolvedValue([]); // BC25 not available in new country
+    const docker = createMockDocker();
+    const uri = vscode.Uri.file("/ext");
+
+    RegistryPanel.show(artifacts, docker, createMockContainerProvider(), uri);
+
+    const handler = getMessageHandler();
+    await handler({ command: "loadCountry", type: "sandbox", country: "ca", major: 25 });
+
+    const messages = getPostedMessages();
+    // Must notify the webview that the major was not found
+    const notFound = messages.find((m) => m.command === "majorNotFound");
+    expect(notFound).toBeDefined();
+    expect((notFound as any).major).toBe(25);
+    // Must fall back to normal paginated load
+    expect(messages.find((m) => m.command === "versions")).toBeDefined();
+    // Must NOT send majorVersions_data
+    expect(messages.find((m) => m.command === "majorVersions_data")).toBeUndefined();
+  });
+
+  it("forwards getMajorVersions and getVersionsByMajor calls with correct args", async () => {
+    const artifacts = createMockArtifacts();
+    artifacts.getVersionsByMajor.mockResolvedValue([makeVersion("25.0.0.0")]);
+    const docker = createMockDocker();
+    const uri = vscode.Uri.file("/ext");
+
+    RegistryPanel.show(artifacts, docker, createMockContainerProvider(), uri);
+
+    const handler = getMessageHandler();
+    await handler({ command: "loadCountry", type: "onprem", country: "gb", major: 25 });
+
+    expect(artifacts.getMajorVersions).toHaveBeenCalledWith("onprem", "gb");
+    expect(artifacts.getVersionsByMajor).toHaveBeenCalledWith("onprem", "gb", 25);
+  });
+
+  it("ignores non-numeric major values (treats as no major)", async () => {
+    const artifacts = createMockArtifacts();
+    const docker = createMockDocker();
+    const uri = vscode.Uri.file("/ext");
+
+    RegistryPanel.show(artifacts, docker, createMockContainerProvider(), uri);
+
+    const handler = getMessageHandler();
+    // "all" from the dropdown becomes undefined on the extension side
+    await handler({ command: "loadCountry", type: "sandbox", country: "us" });
+
+    // Should use normal path (getLatestVersions + getMajorVersions)
+    expect(artifacts.getLatestVersions).toHaveBeenCalled();
+    expect(artifacts.getVersionsByMajor).not.toHaveBeenCalled();
+  });
+});

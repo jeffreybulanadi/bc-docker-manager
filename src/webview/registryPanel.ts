@@ -115,6 +115,7 @@ export class RegistryPanel {
         await this._handleLoadCountry(
           msg.type as BcArtifactType,
           msg.country as string | undefined,
+          typeof msg.major === "number" ? msg.major : undefined,
         );
         break;
 
@@ -363,12 +364,44 @@ export class RegistryPanel {
   private async _handleLoadCountry(
     type: BcArtifactType,
     country?: string,
+    major?: number,
   ): Promise<void> {
     try {
       const countries = await this._artifacts.getCountries(type);
       this._post({ command: "countries", type, countries });
 
       const target = country || (countries.includes("us") ? "us" : countries[0] || "w1");
+
+      if (major !== undefined) {
+        // Sticky-major path: user changed country while a specific major was
+        // selected. Fetch the major version list and the major-specific versions
+        // in parallel to keep latency as low as a single-major load.
+        const [majors, versions] = await Promise.all([
+          this._artifacts.getMajorVersions(type, target),
+          this._artifacts.getVersionsByMajor(type, target, major),
+        ]);
+
+        this._post({ command: "majorVersions", majors });
+
+        if (versions.length === 0) {
+          // The selected major does not exist in this country. Let the webview
+          // know so it can reset the filter dropdown and fall back to the normal
+          // paginated view — which we then send immediately after.
+          this._post({ command: "majorNotFound", major });
+          await this._loadVersions(type, target);
+        } else {
+          this._post({
+            command: "majorVersions_data",
+            type,
+            country: target,
+            major,
+            versions: versions.map(serializeVersion),
+            totalCount: versions.length,
+          });
+        }
+        return;
+      }
+
       await this._loadVersions(type, target);
     } catch (err) {
       this._post({

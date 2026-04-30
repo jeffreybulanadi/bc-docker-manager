@@ -52,6 +52,9 @@
       });
       tab.classList.add("active");
       currentType = tab.dataset.type;
+      // Reset major dropdown when switching tabs — a tab change is a new
+      // exploration context, not a same-major cross-country comparison.
+      majorSelect.value = "all";
       resetState();
       showLoading();
       vscode.postMessage({
@@ -65,14 +68,26 @@
   /* -- Country change ------------------------------------------ */
   countrySelect.addEventListener("change", function () {
     if (!countrySelect.value) { return; }
+    // Preserve the selected major across country changes (sticky major).
+    // If the user had BC25 selected and switches from US to CA, they
+    // expect to see BC25 for CA — not a fresh unfiltered result set.
+    var prevMajor = majorSelect.value;
     currentCountry = countrySelect.value;
     resetState();
+    if (prevMajor !== "all") {
+      // Keep the server-filtered flag so renderTable does not double-filter.
+      majorServerFiltered = true;
+    }
     showLoading();
-    vscode.postMessage({
+    var msg = {
       command: "loadCountry",
       type: currentType,
       country: countrySelect.value,
-    });
+    };
+    if (prevMajor !== "all") {
+      msg.major = parseInt(prevMajor, 10);
+    }
+    vscode.postMessage(msg);
   });
 
   /* -- Search / filter ----------------------------------------- */
@@ -181,7 +196,11 @@
         break;
 
       case "majorVersions_data":
-        // Replace loaded versions with the major-filtered set
+        // Replace loaded versions with the major-filtered set.
+        // Restore country in case populateCountryDropdown rebuilt the dropdown.
+        if (msg.country && countrySelect.value !== msg.country) {
+          countrySelect.value = msg.country;
+        }
         loadedVersions = msg.versions;
         totalCount     = msg.totalCount;
         currentOffset  = msg.totalCount;
@@ -189,6 +208,13 @@
         loadingMore    = false;
         showTable();
         renderTable();
+        break;
+
+      case "majorNotFound":
+        // The selected major does not exist in the new country.
+        // Fall back to showing all versions so the user is not stuck on 0.
+        majorServerFiltered = false;
+        majorSelect.value = "all";
         break;
 
       case "error":
@@ -343,6 +369,7 @@
   });
 
   function populateCountryDropdown(countries) {
+    var prev = countrySelect.value || currentCountry;
     countrySelect.innerHTML = "";
     countries.forEach(function (c) {
       var o = document.createElement("option");
@@ -350,6 +377,8 @@
       o.textContent = c.toUpperCase();
       countrySelect.appendChild(o);
     });
+    // Restore the previously selected country if it still exists in the new list.
+    if (prev) { countrySelect.value = prev; }
   }
 
   function populateMajorDropdown() {
