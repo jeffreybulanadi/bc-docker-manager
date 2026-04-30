@@ -160,13 +160,13 @@ export class RegistryPanel {
     // 2. Container name
     const defaultName = `bc${version.split(".")[0]}${country}`;
     const name = await vscode.window.showInputBox({
-      title: "Create BC Container (1/3) — Name",
+      title: "Create BC Container (1/3): Name",
       prompt: "Container name (lowercase, no spaces)",
       value: defaultName,
       validateInput: (v) => {
         if (!v) { return "Name is required"; }
         if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(v)) {
-          return "Invalid container name — use letters, numbers, dash, dot, underscore";
+          return "Invalid container name. Use letters, numbers, dash, dot, or underscore";
         }
         return undefined;
       },
@@ -175,14 +175,14 @@ export class RegistryPanel {
 
     // 3. Credentials
     const username = await vscode.window.showInputBox({
-      title: "Create BC Container (2/3) — Username",
+      title: "Create BC Container (2/3): Username",
       prompt: "Admin username for the BC instance",
       value: "admin",
     });
     if (!username) { return; }
 
     const password = await vscode.window.showInputBox({
-      title: "Create BC Container (3/3) — Password",
+      title: "Create BC Container (3/3): Password",
       prompt: "Admin password",
       password: true,
       validateInput: (v) => {
@@ -202,6 +202,11 @@ export class RegistryPanel {
     if (eula !== "Accept") { return; }
 
     // 5. Create container using native docker run
+    const config = vscode.workspace.getConfiguration("bcDockerManager");
+    const memoryLimit = config.get<string>("defaultMemory", "8G");
+    const isolation = config.get<"hyperv" | "process">("defaultIsolation", "hyperv");
+    const auth = config.get<string>("defaultAuth", "UserPassword");
+
     const output = vscode.window.createOutputChannel("BC Container Creation");
     output.show(true);
 
@@ -219,8 +224,9 @@ export class RegistryPanel {
             artifactUrl,
             username,
             password,
-            memoryLimit: "8G",
-            auth: "UserPassword",
+            memoryLimit,
+            isolation,
+            auth,
             updateHosts: true,
           },
           output,
@@ -236,7 +242,7 @@ export class RegistryPanel {
           cancellable: false,
         },
         async (progress) => {
-          progress.report({ message: "Downloading artifacts and installing BC (5-15 min)…" });
+          progress.report({ message: "Downloading artifacts and installing BC (5-15 min)..." });
           return this._docker.waitForContainerReady(name, output);
         },
       );
@@ -288,9 +294,9 @@ export class RegistryPanel {
   }
 
   private async _initPanel(): Promise<void> {
-    // Auto-load sandbox with a sensible default country (e.g. "us")
-    // so the user sees data immediately instead of a blank prompt.
-    await this._handleLoadCountry("sandbox");
+    const config = vscode.workspace.getConfiguration("bcDockerManager");
+    const defaultCountry = config.get<string>("defaultCountry", "us");
+    await this._handleLoadCountry("sandbox", defaultCountry);
   }
 
   private async _handleLoadCountry(
