@@ -12,6 +12,7 @@ import { VolumeProvider } from "./tree/volumeProvider";
 import { RegistryPanel } from "./webview/registryPanel";
 import { ContainerTreeItem, ImageTreeItem } from "./tree/models";
 import { VolumeTreeItem } from "./tree/volumeProvider";
+import { ArtifactsLauncherProvider } from "./tree/artifactsLauncherProvider";
 import { initTelemetry, disposeTelemetry, sendEvent, sendError } from "./services/telemetry";
 
 /**
@@ -36,6 +37,7 @@ export async function activate(
   const imageProvider = new ImageProvider(docker);
   const healthProvider = new DockerHealthProvider();
   const volumeProvider = new VolumeProvider(bcService);
+  const artifactsLauncherProvider = new ArtifactsLauncherProvider();
 
   // Preload countries in background so the panel opens instantly.
   // This warms up the TLS connection + populates memory & disk cache.
@@ -58,6 +60,9 @@ export async function activate(
     }),
     vscode.window.createTreeView("bcDockerManager-volumes", {
       treeDataProvider: volumeProvider,
+    }),
+    vscode.window.createTreeView("bcDockerManager-artifacts", {
+      treeDataProvider: artifactsLauncherProvider,
     }),
     healthProvider,
   );
