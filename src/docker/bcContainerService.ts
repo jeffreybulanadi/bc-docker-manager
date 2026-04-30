@@ -1,8 +1,10 @@
 import { exec } from "child_process";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 import { DockerService } from "./dockerService";
+import { SWRCache } from "../services/swrCache";
 
 // ────────────────────────── Constants ───────────────────────────
 
@@ -28,7 +30,11 @@ const NAV_MODULE_IMPORT =
  * This keeps dockerService.ts focused on generic Docker operations.
  */
 export class BcContainerService {
-  constructor(private docker: DockerService) {}
+  private readonly _volumeCache: SWRCache<DockerVolume[]>;
+
+  constructor(private docker: DockerService) {
+    this._volumeCache = new SWRCache<DockerVolume[]>(30_000);
+  }
 
   // ── shell helper ─────────────────────────────────────────────
 
@@ -44,8 +50,21 @@ export class BcContainerService {
     });
   }
 
-  /** Run a PowerShell command inside a container. */
+  /** Run a PowerShell utility command inside a container (no NAV module). */
   private async execInContainer(
+    containerName: string,
+    psCommand: string,
+    timeoutMs = EXEC_TIMEOUT_MS,
+  ): Promise<string> {
+    const escaped = psCommand.replace(/"/g, '\\"');
+    return this.exec(
+      `docker exec ${containerName} powershell -NoProfile -Command "${escaped}"`,
+      timeoutMs,
+    );
+  }
+
+  /** Run a NAV/BC PowerShell cmdlet inside a container (imports NavAdminTool). */
+  private async execNavInContainer(
     containerName: string,
     psCommand: string,
     timeoutMs = EXEC_TIMEOUT_MS,
@@ -128,11 +147,11 @@ export class BcContainerService {
           `-Path '${containerPath}'`,
           `-SkipVerification`,
         ].join(" ");
-        await this.execInContainer(containerName, publishCmd, 300_000);
+        await this.execNavInContainer(containerName, publishCmd, 300_000);
 
         // Step 4: Sync and install
         progress.report({ message: "Syncing & installing…" });
-        const appInfo = await this.execInContainer(
+        const appInfo = await this.execNavInContainer(
           containerName,
           `Get-NAVAppInfo -Path '${containerPath}' | ConvertTo-Json -Depth 1`,
         );
@@ -141,14 +160,14 @@ export class BcContainerService {
           const appName = info.Name || info.name;
           const appVersion = info.Version || info.version;
           if (appName && appVersion) {
-            await this.execInContainer(
+            await this.execNavInContainer(
               containerName,
               `Sync-NAVApp -ServerInstance '${serverInstance}' -Name '${appName}' -Version '${appVersion}' -Mode ForceSync`,
               120_000,
             );
             // Try install, but it may already be installed (upgrade case)
             try {
-              await this.execInContainer(
+              await this.execNavInContainer(
                 containerName,
                 `Install-NAVApp -ServerInstance '${serverInstance}' -Name '${appName}' -Version '${appVersion}' -Force`,
                 120_000,
@@ -156,7 +175,7 @@ export class BcContainerService {
             } catch {
               // If install fails, try Start-NAVAppDataUpgrade for upgrades
               try {
-                await this.execInContainer(
+                await this.execNavInContainer(
                   containerName,
                   `Start-NAVAppDataUpgrade -ServerInstance '${serverInstance}' -Name '${appName}' -Version '${appVersion}' -Force`,
                   120_000,
@@ -208,14 +227,14 @@ export class BcContainerService {
         const serverInstance = await this.getServerInstance(containerName);
 
         progress.report({ message: "Importing license…" });
-        await this.execInContainer(
+        await this.execNavInContainer(
           containerName,
           `Import-NAVServerLicense -ServerInstance '${serverInstance}' -LicenseFile '${containerPath}' -Database NavDatabase -Force`,
           60_000,
         );
 
         progress.report({ message: "Restarting service tier…" });
-        await this.execInContainer(
+        await this.execNavInContainer(
           containerName,
           `Restart-NAVServerInstance -ServerInstance '${serverInstance}' -Force`,
           120_000,
@@ -261,7 +280,7 @@ export class BcContainerService {
       { location: vscode.ProgressLocation.Notification, title: `Adding user "${username}"…` },
       async () => {
         const serverInstance = await this.getServerInstance(containerName);
-        await this.execInContainer(
+        await this.execNavInContainer(
           containerName,
           [
             `$pw = ConvertTo-SecureString '${password.replace(/'/g, "''")}' -AsPlainText -Force;`,
@@ -297,7 +316,7 @@ export class BcContainerService {
         for (const user of testUsers) {
           progress.report({ message: `Creating ${user.name}…` });
           try {
-            await this.execInContainer(
+            await this.execNavInContainer(
               containerName,
               [
                 `$pw = ConvertTo-SecureString 'P@ssw0rd' -AsPlainText -Force;`,
@@ -322,7 +341,7 @@ export class BcContainerService {
     const saveUri = await vscode.window.showSaveDialog({
       filters: { "Database Backup": ["bak"] },
       defaultUri: vscode.Uri.file(
-        path.join(require("os").homedir(), `${containerName}_backup.bak`),
+        path.join(os.homedir(), `${containerName}_backup.bak`),
       ),
       title: "Save database backup as…",
     });
@@ -395,7 +414,7 @@ export class BcContainerService {
         await this.copyToContainer(containerName, hostPath, containerBakPath);
 
         progress.report({ message: "Stopping service tier…" });
-        await this.execInContainer(
+        await this.execNavInContainer(
           containerName,
           `Set-NAVServerInstance -ServerInstance '${serverInstance}' -Stop`,
           60_000,
@@ -409,7 +428,7 @@ export class BcContainerService {
         );
 
         progress.report({ message: "Starting service tier…" });
-        await this.execInContainer(
+        await this.execNavInContainer(
           containerName,
           `Set-NAVServerInstance -ServerInstance '${serverInstance}' -Start`,
           120_000,
@@ -487,7 +506,7 @@ export class BcContainerService {
         for (const app of apps) {
           progress.report({ message: `Publishing ${app.Name} (${++published}/${apps.length})…` });
           try {
-            await this.execInContainer(
+            await this.execNavInContainer(
               containerName,
               `Publish-NAVApp -ServerInstance '${serverInstance}' -Path '${app.FullName}' -SkipVerification -Install`,
               120_000,
@@ -557,7 +576,7 @@ export class BcContainerService {
     const raw = await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: "Reading NST settings…" },
       async () => {
-        return await this.execInContainer(
+        return await this.execNavInContainer(
           containerName,
           `Get-NAVServerConfiguration -ServerInstance '${serverInstance}' | Select-Object KeyName, Value | ConvertTo-Json -Depth 1`,
           30_000,
@@ -597,7 +616,7 @@ export class BcContainerService {
     await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: `Updating ${selected.label}…` },
       async () => {
-        await this.execInContainer(
+        await this.execNavInContainer(
           containerName,
           `Set-NAVServerConfiguration -ServerInstance '${serverInstance}' -KeyName '${selected.label}' -KeyValue '${newValue.replace(/'/g, "''")}'`,
         );
@@ -608,7 +627,7 @@ export class BcContainerService {
           "Later",
         );
         if (restart === "Restart Now") {
-          await this.execInContainer(
+          await this.execNavInContainer(
             containerName,
             `Restart-NAVServerInstance -ServerInstance '${serverInstance}' -Force`,
             120_000,
@@ -788,8 +807,6 @@ export class BcContainerService {
       { location: vscode.ProgressLocation.Notification, title: "Compiling AL app…" },
       async (progress) => {
         const serverInstance = await this.getServerInstance(containerName);
-
-        // Find the AL compiler in the container
         progress.report({ message: "Locating AL compiler…" });
         const alcPath = await this.execInContainer(
           containerName,
@@ -856,7 +873,7 @@ export class BcContainerService {
     const saveUri = await vscode.window.showSaveDialog({
       filters: { "Docker Image": ["tar"] },
       defaultUri: vscode.Uri.file(
-        path.join(require("os").homedir(), `${containerName}.tar`),
+        path.join(os.homedir(), `${containerName}.tar`),
       ),
       title: "Export container as…",
     });
@@ -904,6 +921,10 @@ export class BcContainerService {
   // ── v1.4: Volume Management ──────────────────────────────────
 
   async getVolumes(): Promise<DockerVolume[]> {
+    return this._volumeCache.get("all", () => this._fetchVolumes());
+  }
+
+  private async _fetchVolumes(): Promise<DockerVolume[]> {
     const raw = await this.exec('docker volume ls --format "{{json .}}"');
     return raw
       .split("\n")
@@ -926,11 +947,13 @@ export class BcContainerService {
     });
     if (!name) { return; }
     await this.exec(`docker volume create ${name}`);
+    this._volumeCache.invalidate("all");
     vscode.window.showInformationMessage(`Volume "${name}" created.`);
   }
 
   async removeVolume(name: string): Promise<void> {
     await this.exec(`docker volume rm ${name}`);
+    this._volumeCache.invalidate("all");
   }
 
   async inspectVolume(name: string): Promise<void> {
@@ -959,7 +982,7 @@ export class BcContainerService {
     }
 
     try {
-      const raw = await this.execInContainer(
+      const raw = await this.execNavInContainer(
         containerName,
         [
           `$si = (Get-NAVServerInstance | Select-Object -First 1).ServerInstance -replace '.*\\\\$', '';`,

@@ -42,6 +42,9 @@ export async function activate(
   artifacts.getCountries("sandbox").catch(() => {});
   artifacts.getCountries("onprem").catch(() => {});
 
+  // Register DockerService for disposal so its EventEmitter is cleaned up.
+  context.subscriptions.push(docker);
+
   // ── Tree views ─────────────────────────────────────────────────
   context.subscriptions.push(
     vscode.window.createTreeView("bcDockerManager-environment", {
@@ -97,8 +100,11 @@ export async function activate(
     })
   );
 
-  // Auto-open BC Artifacts Explorer on activation
-  RegistryPanel.show(artifacts, docker, context.extensionUri);
+  // Auto-open BC Artifacts Explorer on first install only.
+  if (!context.globalState.get<boolean>("bcDockerManager.hasAutoOpened")) {
+    context.globalState.update("bcDockerManager.hasAutoOpened", true);
+    RegistryPanel.show(artifacts, docker, context.extensionUri);
+  }
 
   // Diagnostic: test CDN connectivity from inside the extension host
   context.subscriptions.push(

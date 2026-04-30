@@ -68,7 +68,7 @@ export class BcArtifactsService {
   private _diskCacheDir: string | undefined;
 
   /** Pending disk-write promises (for test flushing). */
-  private _pendingWrites: Promise<void>[] = [];
+  private _pendingWrites = new Set<Promise<void>>();
 
   /**
    * Call once after construction to enable disk caching.
@@ -153,10 +153,8 @@ export class BcArtifactsService {
     const fp = this._diskCachePath(key);
     if (!fp) { return; }
     const p = fsp.writeFile(fp, JSON.stringify(data)).catch(() => { /* best-effort */ });
-    this._pendingWrites.push(p);
-    p.then(() => {
-      this._pendingWrites = this._pendingWrites.filter((w) => w !== p);
-    });
+    this._pendingWrites.add(p);
+    p.finally(() => this._pendingWrites.delete(p));
   }
 
   /** Wait for all pending disk writes to complete. Useful for testing. */
@@ -272,7 +270,7 @@ export class BcArtifactsService {
         minor: parseInt(parts[1], 10) || 0,
         type,
         country,
-        artifactUrl: `https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net/${type}/${entry.Version}/${country}`,
+        artifactUrl: `${CDN_BASE}/${type}/${entry.Version}/${country}`,
       };
     });
 
