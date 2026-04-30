@@ -146,26 +146,36 @@ export class DockerService implements vscode.Disposable {
   /**
    * List only Business Central containers.
    *
-   * Detection strategy (same as the official BcContainerHelper):
-   *  1. `docker ps --filter "label=nav"` — every official BC image
-   *     sets a `nav` label with the BC version string.
-   *  2. Fallback: image-name heuristic (matches "businesscentral"
-   *     anywhere in the name, or "bc" as a delimited segment).
+   * Detection strategy - a container is classified as BC if ANY of the
+   * following are true (checked in a single pass):
+   *  1. Label `nav` is present - set on official BC images by Microsoft.
+   *  2. Label `maintainer` equals "Dynamics SMB" - set on official BC images.
+   *  3. Image name matches the BC heuristic ("businesscentral" substring or
+   *     "bc" as a delimited segment) - catches containers created by this
+   *     extension before BC initialisation stamps its own labels.
+   *
+   * All three checks are applied inclusively so that extension-created
+   * containers (which start as the generic base image without labels) are
+   * visible in the BC filter from the moment they appear in `docker ps`.
    */
   async getBcContainers(): Promise<DockerContainer[]> {
     return this._containerCache.get("bc", () => this._fetchBcContainers());
   }
 
   private async _fetchBcContainers(): Promise<DockerContainer[]> {
-    // Reuse the already-enriched "all" containers list — no second docker ps or docker inspect.
+    // Reuse the already-enriched "all" containers list - no second docker ps or docker inspect.
     const all = await this.getContainers();
 
-    // Prefer label-based detection (official BC images set a "nav" label).
-    let containers = all.filter((c) => "nav" in c.labels || c.labels["maintainer"] === "Dynamics SMB");
-    if (containers.length === 0) {
-      containers = all.filter((c) => this.looksLikeBcImage(c.image));
-    }
-    return containers;
+    // Inclusive detection: label check OR image-name heuristic in a single O(n) pass.
+    // Using an exclusive fallback (only check image name when no labelled containers exist)
+    // caused extension-created containers to vanish from the BC view whenever any other
+    // labelled BC container was already running.
+    return all.filter(
+      (c) =>
+        "nav" in c.labels ||
+        c.labels["maintainer"] === "Dynamics SMB" ||
+        this.looksLikeBcImage(c.image),
+    );
   }
 
   async startContainer(id: string): Promise<void> {
@@ -615,6 +625,9 @@ export class DockerService implements vscode.Disposable {
       "-e", `username=${opts.username}`,
       "-e", `password=${opts.password}`,
       "-e", `auth=${opts.auth || "UserPassword"}`,
+      // Stamp a "nav" label so this container is immediately recognised by
+      // the BC filter without waiting for BC initialisation to set its own labels.
+      "--label", "nav=extension-created",
     ];
 
     if (opts.accept_outdated) {

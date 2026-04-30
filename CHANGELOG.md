@@ -7,6 +7,16 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.2.2] - 2026-04-30
+
+### Fixed
+- Containers created via the extension were not visible when the BC filter was active. The filter used an exclusive fallback: it checked Docker labels (`nav`, `maintainer`) first, and only fell back to the image-name heuristic when zero labelled containers existed. Containers created by this extension use the generic `mcr.microsoft.com/businesscentral:ltsc2022` base image, which carries no labels until BC finishes initialisation. If any other labelled BC container was already running, the new container was silently excluded from the BC view. Reported in [#5](https://github.com/jeffreybulanadi/bc-docker-manager/issues/5), confirmed by `@kennetlindberg`.
+- The filter is now inclusive: all three signals (label `nav`, label `maintainer=Dynamics SMB`, image-name heuristic) are evaluated in a single O(n) pass. A container matching any one signal appears in the BC view.
+- The `docker run` command now stamps `--label nav=extension-created` on every container created by the extension so it is recognised immediately, even before BC initialisation completes.
+- The container tree now refreshes 5 seconds after creation starts (so the container appears while BC is still initialising), then every 30 seconds throughout the initialisation process so the tree stays current. Previously the tree only refreshed after BC was fully ready (5-15 minutes later).
+
+---
+
 ## [1.2.1] - 2026-04-30
 
 ### Fixed

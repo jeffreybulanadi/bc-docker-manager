@@ -255,6 +255,13 @@ describe("DockerService.buildRunArgs", () => {
     expect(dnsValues).toContain("8.8.8.8");
     expect(dnsValues).toContain("8.8.4.4");
   });
+
+  it("stamps --label nav=extension-created for BC filter visibility", () => {
+    const args = buildArgs();
+    const labelIdx = args.indexOf("--label");
+    expect(labelIdx).toBeGreaterThan(-1);
+    expect(args[labelIdx + 1]).toBe("nav=extension-created");
+  });
 });
 
 // ─── parseLines (private, accessed via `any`) ────────────────────

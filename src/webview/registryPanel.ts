@@ -234,7 +234,19 @@ export class RegistryPanel {
         ),
       );
 
-      // Phase 2: Wait for the container to fully initialize
+      // Phase 2: Wait for the container to fully initialize.
+      // Trigger an early refresh after 5 s so the container appears in the
+      // tree immediately after `docker run -d` completes, then keep the tree
+      // current throughout the long initialisation with 30 s periodic refreshes.
+      const earlyRefresh = setTimeout(
+        () => vscode.commands.executeCommand("bcDockerManager.refresh"),
+        5_000,
+      );
+      const periodicRefresh = setInterval(
+        () => vscode.commands.executeCommand("bcDockerManager.refresh"),
+        30_000,
+      );
+
       const containerReady = await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
@@ -247,6 +259,8 @@ export class RegistryPanel {
         },
       );
 
+      clearTimeout(earlyRefresh);
+      clearInterval(periodicRefresh);
       vscode.commands.executeCommand("bcDockerManager.refresh");
 
       if (!containerReady) {
