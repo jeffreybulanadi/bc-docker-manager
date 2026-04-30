@@ -72,7 +72,8 @@
         {
           "id": "bcDockerManager-artifacts",
           "name": "BC Artifacts",
-          "icon": "$(globe)"
+          "icon": "$(globe)",
+          "visibility": "visible"
         }
       ]
     },
