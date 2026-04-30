@@ -18,8 +18,24 @@ ui-tests/**
 out/e2e/**
 out/ui-tests/**
 out/screenshots/**
+screenshots/**
 screenshots/**/*.ts
 screenshots/tsconfig.json
 jest.config.js
 **/*.test.js
 **/*.test.ts
+
+# Build tool — not needed at runtime
+node_modules/**
+esbuild.js
+
+# Dev utility scripts
+create-clean-icon.js
+trace-icon.js
+
+# Old packaged VSIXs
+*.vsix
+
+# TypeScript declarations re-included by !out/** but unused at runtime
+out/**/*.d.ts
+out/**/*.d.ts.map

@@ -729,8 +729,9 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "node -e \"require('fs').rmSync('out',{recursive:true,force:true})\" && node esbuild.js --production",
     "compile": "tsc -p ./",
+    "esbuild": "node esbuild.js",
     "watch": "tsc -watch -p ./",
     "package": "vsce package",
     "test": "jest",
@@ -751,6 +752,7 @@
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^2.22.0",
     "chai": "^6.2.2",
+    "esbuild": "^0.28.0",
     "glob": "^13.0.6",
     "jest": "^29.7.0",
     "mocha": "^11.7.5",
