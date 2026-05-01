@@ -193,10 +193,12 @@ BC containers use self-signed certificates and custom hostnames. This extension 
 
 ## Database Operations
 
+All file transfers run through a single streaming process, so backup and restore are fast even on large databases and work without issue on Hyper-V containers.
+
 | Command | What it does |
 |---------|-------------|
-| **Backup Database** | Creates a compressed `.bak` file via SQL Server |
-| **Restore Database** | Restores from backup (stops > restores > restarts the service tier) |
+| **Backup Database** | Creates a `.bak` file via SQL Server. Express edition is detected automatically and compression is skipped when needed. |
+| **Restore Database** | Restores from a `.bak` file (stops the service tier, restores, restarts). |
 
 ---
 

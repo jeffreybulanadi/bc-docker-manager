@@ -7,9 +7,22 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.3.2] - 2026-05-01
+
+### Changed
+
+- All file transfers between the host and Hyper-V containers now go through a single persistent `docker exec` spawn instead of spawning a new PowerShell process per chunk. License upload, app publish, database backup, database restore, and AL compilation previously opened one process every 5-50 KB of data. On a 500 MB backup that was roughly 10,000 process starts at ~400 ms each. The transfer now streams through one long-lived process, keeping a 48 KB sliding window in memory regardless of file size, and completes in seconds rather than hours.
+
+- SQL Server Express edition is now detected automatically before each backup attempt. When Express is detected, the `COMPRESSION` option is omitted from the `BACKUP DATABASE` statement. Previously the command failed with `BACKUP DATABASE WITH COMPRESSION is not supported on Express`, requiring the user to switch editions manually.
+
+- PowerShell ANSI color escape sequences are stripped from error messages before they are shown in VS Code notifications. The raw terminal codes were leaking into toasts and output channel messages as garbled characters.
+
+---
+
 ## [1.3.1] - 2025-05-01
 
-### Fixed
+### Changed
+
 - Changing country while a specific BC major version (e.g. BC25) was selected showed 0 results. The filter state was reset on country change but the major dropdown kept its previous selection, causing the client-side major filter to exclude all rows returned by the unfiltered `getLatestVersions` fetch (which returns the most recent N versions, typically a different major). The extension now passes the selected major with the country-change request and fetches `getMajorVersions` and `getVersionsByMajor` in parallel, returning the major-specific results directly. If the selected major has no releases in the new country, the extension sends a `majorNotFound` signal so the frontend resets the filter to show all versions.
 - Changing the artifact tab (Sandbox vs OnPrem) while a major was selected could produce 0 results for the same reason. The tab change handler now resets the major dropdown to "All" before loading, since a tab switch is an explicit context change rather than a cross-country comparison.
 - Country dropdown was rebuilt from scratch on every `countries` message without restoring the previously selected value. The selection is now preserved using the same pattern as the major dropdown.
