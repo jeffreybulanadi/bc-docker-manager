@@ -110,13 +110,11 @@ const PAGE_CSS = `
 .rn-social a { opacity: 1; }
 
 /* ── highlights / welcome block ── */
-.rn-welcome { margin: 1.5em 0 2em; padding: 16px 20px; border-radius: 4px; }
-.vscode-light .rn-welcome { background: rgba(0,0,0,.025); border: 1px solid rgba(0,0,0,.08); }
-.vscode-dark  .rn-welcome { background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.08); }
+.rn-welcome { margin: 1.5em 0 0; }
 .rn-welcome-intro { margin: 0 0 12px; line-height: 1.6; }
 .rn-highlights { margin: 0 0 12px; padding-left: 20px; }
 .rn-highlights li { margin: 6px 0; line-height: 1.5; }
-.rn-happy-coding { margin: 0; font-style: italic; opacity: .75; }
+.rn-happy-coding { margin: 0 0 1.5em; font-style: italic; opacity: .75; }
 
 /* ── screenshots ── */
 .rn-figure { margin: 16px 0; }
@@ -383,7 +381,7 @@ function renderCurrentMain(r: Release, checked: string, toUri: (rel: string) => 
 <p class="rn-welcome-intro">Welcome to <strong>BC Docker Manager ${esc(r.version)}</strong>. Here are the highlights for this release:</p>
 <ul class="rn-highlights">${bullets}</ul>
 <p class="rn-happy-coding">Happy Coding!</p>
-</div>`;
+</div><hr>`;
       }
       return `<h2 id="${slug(s.name)}">${esc(s.name)}</h2>${renderSectionItems(s.items, toUri)}`;
     })
