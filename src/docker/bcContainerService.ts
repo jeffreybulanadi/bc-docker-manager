@@ -180,20 +180,21 @@ export class BcContainerService {
       });
 
       const readStream = fs.createReadStream(hostPath, { highWaterMark: FILE_TRANSFER_CHUNK });
-      let pending = Buffer.alloc(0);
+      let pending: Buffer<ArrayBuffer> = Buffer.alloc(0);
 
-      readStream.on("data", (chunk: Buffer) => {
-        const buf = pending.length ? Buffer.concat([pending, chunk]) : chunk;
+      readStream.on("data", (chunk: string | Buffer<ArrayBufferLike>) => {
+        const raw: Buffer<ArrayBuffer> = Buffer.isBuffer(chunk) ? Buffer.from(chunk) : Buffer.from(chunk as string);
+        const buf = pending.length ? Buffer.concat([pending, raw]) : raw;
         const usable = buf.length - (buf.length % 3);
         if (usable > 0) {
           const canContinue = proc.stdin.write(buf.slice(0, usable).toString("base64") + "\n");
-          pending = buf.slice(usable);
+          pending = buf.slice(usable) as Buffer<ArrayBuffer>;
           if (!canContinue) {
             readStream.pause();
             proc.stdin.once("drain", () => readStream.resume());
           }
         } else {
-          pending = buf;
+          pending = buf as Buffer<ArrayBuffer>;
         }
       });
 
