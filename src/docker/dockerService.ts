@@ -517,7 +517,7 @@ export class DockerService implements vscode.Disposable {
     log?.(`Image:    ${image}`);
     log?.(`Artifact: ${opts.artifactUrl}`);
     log?.(`Auth:     ${opts.auth || "UserPassword"}`);
-    log?.(`Memory:   ${opts.memoryLimit || "8G"}`);
+    log?.(`Memory:   ${DockerService.normalizeMemory(opts.memoryLimit || "8G")}`);
     log?.("");
 
     // Pre-pull the image with streaming progress so the user sees
@@ -656,14 +656,27 @@ export class DockerService implements vscode.Disposable {
   private async dumpContainerLogs(containerName: string, output?: vscode.OutputChannel): Promise<void> {
     if (!output) { return; }
     try {
-      const logs = await this.exec(`docker logs --tail 50 ${containerName}`, 10_000);
+      // Merge stderr into stdout so container stderr (most BC log output) is captured.
+      const logs = await this.exec(`docker logs --tail 50 ${containerName} 2>&1`, 10_000);
       const trimmed = logs.trim();
       if (trimmed) {
         output.appendLine(`\n-- Last container logs --`);
         output.appendLine(trimmed);
         output.appendLine(`-- End of logs --`);
+      } else {
+        output.appendLine(`\n(No container logs available)`);
       }
     } catch { /* best-effort */ }
+  }
+
+  /**
+   * Normalize a memory string to ensure it has a unit suffix.
+   * Docker requires a unit (b/k/m/g). If the user stores "8" instead of "8G"
+   * Docker interprets it as 8 bytes and the container OOMs immediately.
+   */
+  private static normalizeMemory(mem: string): string {
+    const trimmed = mem.trim();
+    return /[bBkKmMgG]$/.test(trimmed) ? trimmed : `${trimmed}G`;
   }
 
   /**
@@ -683,7 +696,7 @@ export class DockerService implements vscode.Disposable {
       "run", "-d",
       "--name", opts.containerName,
       "--hostname", opts.containerName,
-      "--memory", opts.memoryLimit || "8G",
+      "--memory", DockerService.normalizeMemory(opts.memoryLimit || "8G"),
       "--isolation", opts.isolation || "hyperv",
       // Explicit DNS: Hyper-V containers often fail to resolve Azure
       // Front Door CDN hostnames with the inherited host DNS, which

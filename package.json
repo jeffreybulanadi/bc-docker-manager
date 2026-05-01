@@ -109,6 +109,8 @@
         "bcDockerManager.defaultMemory": {
           "type": "string",
           "default": "8G",
+          "pattern": "^[0-9]+(\\.[0-9]+)?[bBkKmMgG]$",
+          "patternErrorMessage": "Memory must include a unit suffix, e.g. 4G, 8G, 512M.",
           "description": "Default memory limit for new containers (e.g. 4G, 8G, 16G)."
         },
         "bcDockerManager.defaultIsolation": {

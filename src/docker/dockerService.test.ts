@@ -195,6 +195,16 @@ describe("DockerService.buildRunArgs", () => {
     expect(args[args.indexOf("--memory") + 1]).toBe("16G");
   });
 
+  it("appends G when memoryLimit has no unit suffix", () => {
+    const args = buildArgs({ ...baseOpts, memoryLimit: "8" });
+    expect(args[args.indexOf("--memory") + 1]).toBe("8G");
+  });
+
+  it("preserves lowercase unit suffix in memoryLimit", () => {
+    const args = buildArgs({ ...baseOpts, memoryLimit: "4g" });
+    expect(args[args.indexOf("--memory") + 1]).toBe("4g");
+  });
+
   it("defaults isolation to hyperv", () => {
     const args = buildArgs();
     expect(args[args.indexOf("--isolation") + 1]).toBe("hyperv");
