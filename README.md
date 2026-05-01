@@ -223,6 +223,7 @@ Save your container configuration (memory, isolation, auth, DNS, country, licens
 |---------|-------------|
 | **Save Container Profile** | Saves current config to global storage |
 | **Load Container Profile** | Creates a new container from a saved profile |
+| **Edit Container Profile** | Opens a saved profile and lets you change any field in place |
 | **Delete Container Profile** | Removes a saved profile |
 
 ### Bulk Operations
@@ -365,6 +366,7 @@ All commands are available from the Command Palette (`Ctrl+Shift+P`) under the *
 |---------|-------------|
 | Save Container Profile | Save container configuration |
 | Load Container Profile | Create container from saved profile |
+| Edit Container Profile | Update an existing saved profile |
 | Delete Container Profile | Remove a saved profile |
 
 ### Volumes

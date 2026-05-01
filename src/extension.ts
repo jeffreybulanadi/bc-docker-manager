@@ -782,6 +782,16 @@ export async function activate(
     })
   );
 
+  context.subscriptions.push(
+    vscode.commands.registerCommand("bcDockerManager.editProfile", async () => {
+      try {
+        await bcService.editProfile();
+      } catch (err) {
+        showError("edit", "profile", err);
+      }
+    })
+  );
+
   // ── v1.4: Compile AL App ─────────────────────────────────────
 
   context.subscriptions.push(

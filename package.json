@@ -386,6 +386,12 @@
         "category": "BC Docker Manager"
       },
       {
+        "command": "bcDockerManager.editProfile",
+        "title": "Edit Container Profile",
+        "icon": "$(edit)",
+        "category": "BC Docker Manager"
+      },
+      {
         "command": "bcDockerManager.compileApp",
         "title": "Compile AL App in Container",
         "icon": "$(tools)",
@@ -522,6 +528,16 @@
           "command": "bcDockerManager.loadProfile",
           "when": "view == bcDockerManager-containers",
           "group": "bulk@5"
+        },
+        {
+          "command": "bcDockerManager.editProfile",
+          "when": "view == bcDockerManager-containers",
+          "group": "bulk@6"
+        },
+        {
+          "command": "bcDockerManager.deleteProfile",
+          "when": "view == bcDockerManager-containers",
+          "group": "bulk@7"
         }
       ],
       "view/item/context": [

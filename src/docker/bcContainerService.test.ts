@@ -777,6 +777,104 @@ describe("deleteProfile", () => {
   });
 });
 
+// ─── editProfile (public, async) ─────────────────────────────────
+
+describe("editProfile", () => {
+  const existingProfiles = {
+    dev: {
+      name: "dev",
+      memoryLimit: "8G",
+      isolation: "hyperv",
+      auth: "UserPassword",
+      dns: "8.8.8.8",
+      country: "us",
+      licensePath: "C:\\dev.flf",
+      createdAt: "2024-01-01T00:00:00.000Z",
+    },
+  };
+
+  beforeEach(() => {
+    svc.setProfileStoragePath("C:\\profiles");
+    (mockFs.writeFileSync as jest.Mock).mockReturnValue(undefined);
+    (mockFs.mkdirSync as jest.Mock).mockReturnValue(undefined);
+  });
+
+  it("shows info message and returns when no profiles exist", async () => {
+    (mockFs.existsSync as jest.Mock).mockReturnValue(false);
+    await svc.editProfile();
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      expect.stringContaining("No saved profiles"),
+    );
+    expect(mockFs.writeFileSync).not.toHaveBeenCalled();
+  });
+
+  it("returns early when user cancels profile selection", async () => {
+    (mockFs.existsSync as jest.Mock).mockReturnValue(true);
+    (mockFs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify(existingProfiles));
+    (vscode.window.showQuickPick as jest.Mock).mockResolvedValueOnce(undefined);
+    await svc.editProfile();
+    expect(mockFs.writeFileSync).not.toHaveBeenCalled();
+  });
+
+  it("returns early when user cancels mid-flow", async () => {
+    (mockFs.existsSync as jest.Mock).mockReturnValue(true);
+    (mockFs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify(existingProfiles));
+    (vscode.window.showQuickPick as jest.Mock).mockResolvedValueOnce({
+      label: "dev",
+      description: "hyperv | 8G | UserPassword",
+    });
+    (vscode.window.showInputBox as jest.Mock).mockResolvedValueOnce(undefined); // cancel on memoryLimit
+    await svc.editProfile();
+    expect(mockFs.writeFileSync).not.toHaveBeenCalled();
+  });
+
+  it("saves updated profile preserving createdAt", async () => {
+    (mockFs.existsSync as jest.Mock).mockReturnValue(true);
+    (mockFs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify(existingProfiles));
+    (vscode.window.showQuickPick as jest.Mock)
+      .mockResolvedValueOnce({ label: "dev", description: "hyperv | 8G | UserPassword" })
+      .mockResolvedValueOnce({ label: "process" })
+      .mockResolvedValueOnce({ label: "Windows" });
+    (vscode.window.showInputBox as jest.Mock)
+      .mockResolvedValueOnce("16G")
+      .mockResolvedValueOnce("1.1.1.1")
+      .mockResolvedValueOnce("gb")
+      .mockResolvedValueOnce("C:\\new.flf");
+
+    await svc.editProfile();
+
+    const written = JSON.parse((mockFs.writeFileSync as jest.Mock).mock.calls[0][1]);
+    expect(written.dev.memoryLimit).toBe("16G");
+    expect(written.dev.isolation).toBe("process");
+    expect(written.dev.auth).toBe("Windows");
+    expect(written.dev.dns).toBe("1.1.1.1");
+    expect(written.dev.country).toBe("gb");
+    expect(written.dev.licensePath).toBe("C:\\new.flf");
+    expect(written.dev.createdAt).toBe("2024-01-01T00:00:00.000Z");
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith('Profile "dev" updated.');
+  });
+
+  it("clears optional fields when left empty", async () => {
+    (mockFs.existsSync as jest.Mock).mockReturnValue(true);
+    (mockFs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify(existingProfiles));
+    (vscode.window.showQuickPick as jest.Mock)
+      .mockResolvedValueOnce({ label: "dev", description: "hyperv | 8G | UserPassword" })
+      .mockResolvedValueOnce({ label: "hyperv" })
+      .mockResolvedValueOnce({ label: "UserPassword" });
+    (vscode.window.showInputBox as jest.Mock)
+      .mockResolvedValueOnce("8G")
+      .mockResolvedValueOnce("8.8.8.8")
+      .mockResolvedValueOnce("")   // empty -> clear country
+      .mockResolvedValueOnce(""); // empty -> clear licensePath
+
+    await svc.editProfile();
+
+    const written = JSON.parse((mockFs.writeFileSync as jest.Mock).mock.calls[0][1]);
+    expect(written.dev.country).toBeUndefined();
+    expect(written.dev.licensePath).toBeUndefined();
+  });
+});
+
 // ─── backupDatabase edition detection ────────────────────────────
 
 describe("backupDatabase edition detection", () => {
