@@ -39,7 +39,7 @@ function createMockContainerProvider(): any {
 function createMockDocker(): any {
   return {
     createBcContainer: jest.fn().mockResolvedValue(undefined),
-    waitForContainerReady: jest.fn().mockResolvedValue(true),
+    waitForContainerReady: jest.fn().mockResolvedValue("ready"),
     setupContainerNetworking: jest.fn().mockResolvedValue(true),
   };
 }

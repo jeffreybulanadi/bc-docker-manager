@@ -7,6 +7,15 @@ import { SWRCache } from "../services/swrCache";
 
 // ────────────────────────── Interfaces ──────────────────────────
 
+/**
+ * Outcome of waitForContainerReady.
+ * - "ready"     container is healthy and BC is accepting connections
+ * - "exited"    container stopped/died before becoming healthy
+ * - "timeout"   container is still running but did not become healthy within the time limit
+ * - "cancelled" the caller's CancellationToken was triggered
+ */
+export type ContainerReadyResult = "ready" | "exited" | "timeout" | "cancelled";
+
 /** A Docker container as returned by `docker ps -a --format json`. */
 export interface DockerContainer {
   id: string;
@@ -545,15 +554,19 @@ export class DockerService implements vscode.Disposable {
 
   /**
    * Wait for a container to become healthy by polling `docker inspect`.
-   * Returns true if the container becomes healthy within the timeout.
    *
-   * Also streams log snippets to the output channel so the user can
-   * see what phase the initialisation is in.
+   * Returns a reason string so callers can distinguish between success,
+   * an unexpected container exit, a timeout, and user cancellation.
+   *
+   * - "ready"     - container reported healthy (or log-based ready marker found)
+   * - "exited"    - container stopped/died before becoming healthy; last 50 log
+   *                 lines are written to the output channel automatically
+   * - "timeout"   - container is still running but did not become healthy within
+   *                 timeoutMs; container logs were NOT dumped
+   * - "cancelled" - caller's CancellationToken was triggered
    *
    * @param onPhase  Called on every poll with the current phase label.
-   *                 Use this to drive progress notifications or sidebar updates.
-   * @param token    Cancellation token. When cancelled, the loop exits immediately
-   *                 and returns false. Caller is responsible for cleanup.
+   * @param token    Cancellation token.
    */
   async waitForContainerReady(
     containerName: string,
@@ -562,18 +575,18 @@ export class DockerService implements vscode.Disposable {
     pollMs = 10_000,        // check every 10s
     onPhase?: (phase: string) => void,
     token?: vscode.CancellationToken,
-  ): Promise<boolean> {
+  ): Promise<ContainerReadyResult> {
     const log = (msg: string) => output?.appendLine(msg);
     const start = Date.now();
     let lastLogLine = "";
     let currentPhase = "Initializing...";
 
     while (Date.now() - start < timeoutMs) {
-      if (token?.isCancellationRequested) { return false; }
+      if (token?.isCancellationRequested) { return "cancelled"; }
 
       await new Promise((r) => setTimeout(r, pollMs));
 
-      if (token?.isCancellationRequested) { return false; }
+      if (token?.isCancellationRequested) { return "cancelled"; }
 
       // Check container state + health in one shot
       try {
@@ -585,30 +598,29 @@ export class DockerService implements vscode.Disposable {
         const [state, health] = raw.trim().split("|");
 
         if (health === "healthy") {
-          log?.(`\nDone: Container "${containerName}" is ready.`);
+          log(`\nDone: Container "${containerName}" is ready.`);
           onPhase?.("Ready");
-          return true;
+          return "ready";
         }
 
-        // Container exited before becoming healthy
+        // Container exited before becoming healthy - dump logs so the user knows why
         if (state === "exited" || state === "dead") {
-          log?.(`\nError: Container "${containerName}" ${state} unexpectedly.`);
-          return false;
+          log(`\nContainer "${containerName}" stopped before BC was ready.`);
+          await this.dumpContainerLogs(containerName, output);
+          return "exited";
         }
 
-        // "starting" or "unhealthy" while container is still running = keep waiting
         // "no-healthcheck" = image has no HEALTHCHECK, fall back to log-based detection
         if (health === "no-healthcheck" && state === "running") {
-          // Check if the BC initialization has completed by looking for the ready marker in logs
           try {
             const tailRaw = await this.exec(
               `docker logs --tail 5 ${containerName}`,
               5_000,
             );
             if (tailRaw.includes("Ready for connections!") || tailRaw.includes("Container setup complete")) {
-              log?.(`\nDone: Container "${containerName}" is ready. (detected from logs)`);
+              log(`\nDone: Container "${containerName}" is ready (detected from logs).`);
               onPhase?.("Ready");
-              return true;
+              return "ready";
             }
           } catch { /* ignore */ }
         }
@@ -626,7 +638,7 @@ export class DockerService implements vscode.Disposable {
         if (line && line !== lastLogLine) {
           lastLogLine = line;
           const elapsed = Math.round((Date.now() - start) / 1000);
-          log?.(`[${elapsed}s] ${line}`);
+          log(`[${elapsed}s] ${line}`);
           const detected = DockerService.parseInitPhase(line);
           if (detected) { currentPhase = detected; }
         }
@@ -635,8 +647,23 @@ export class DockerService implements vscode.Disposable {
       onPhase?.(currentPhase);
     }
 
-    log?.(`\nError: Timed out waiting for "${containerName}" to become healthy (${Math.round(timeoutMs / 60_000)} min).`);
-    return false;
+    log(`\nTimed out waiting for "${containerName}" to become healthy (${Math.round(timeoutMs / 60_000)} min).`);
+    log(`The container is still running - BC may still be initializing. Networking setup will be attempted.`);
+    return "timeout";
+  }
+
+  /** Write the last 50 log lines of a container to the output channel. */
+  private async dumpContainerLogs(containerName: string, output?: vscode.OutputChannel): Promise<void> {
+    if (!output) { return; }
+    try {
+      const logs = await this.exec(`docker logs --tail 50 ${containerName}`, 10_000);
+      const trimmed = logs.trim();
+      if (trimmed) {
+        output.appendLine(`\n-- Last container logs --`);
+        output.appendLine(trimmed);
+        output.appendLine(`-- End of logs --`);
+      }
+    } catch { /* best-effort */ }
   }
 
   /**

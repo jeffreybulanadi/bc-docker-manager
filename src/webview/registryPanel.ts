@@ -4,7 +4,7 @@ import {
   BcArtifactType,
   BcArtifactVersion,
 } from "../registry/bcArtifactsService";
-import { DockerService } from "../docker/dockerService";
+import { ContainerReadyResult, DockerService } from "../docker/dockerService";
 import { DockerSetup } from "../docker/dockerSetup";
 import { LaunchJsonService } from "../docker/launchJsonService";
 import { ContainerProvider } from "../tree/containerProvider";
@@ -262,8 +262,7 @@ export class RegistryPanel {
       // Phase 2: Wait for the container to fully initialize.
       // The progress toast is cancellable: cancelling sends a CancellationToken
       // into waitForContainerReady which exits the polling loop, then we clean up.
-      let cancelled = false;
-      const containerReady = await vscode.window.withProgress(
+      const readyResult: ContainerReadyResult = await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
           title: `Initializing "${name}"`,
@@ -282,32 +281,39 @@ export class RegistryPanel {
               this._containerProvider.setContainerPhase(name, phase);
             },
             token,
-          ).then((result) => {
-            if (token.isCancellationRequested) { cancelled = true; }
-            return result;
-          });
+          );
         },
       );
 
-      if (cancelled) {
+      this._containerProvider.clearContainerPhase(name);
+      vscode.commands.executeCommand("bcDockerManager.refresh");
+
+      if (readyResult === "cancelled") {
         output.appendLine(`\nCancelled by user. Removing container "${name}"...`);
         await this._docker.removeContainer(name);
-        this._containerProvider.clearContainerPhase(name);
         vscode.commands.executeCommand("bcDockerManager.refresh");
         vscode.window.showInformationMessage(`Container creation cancelled. "${name}" has been removed.`);
         return;
       }
 
-      // Phase complete - clear the initializing state
-      this._containerProvider.clearContainerPhase(name);
-      vscode.commands.executeCommand("bcDockerManager.refresh");
-
-      if (!containerReady) {
-        output.appendLine(`\nWARNING: Health check timed out, but the container may still be initializing.`);
-        output.appendLine(`Proceeding with networking setup anyway...`);
+      if (readyResult === "exited") {
+        output.appendLine(`\nCommon causes: not enough memory, missing license, or an incompatible artifact URL.`);
+        output.appendLine(`The container has been left in place so you can inspect its logs.`);
+        output.appendLine(`Run "docker logs ${name}" for the full output.`);
+        const action = await vscode.window.showErrorMessage(
+          `Container "${name}" stopped before BC was ready. Check the creation output for details.`,
+          "Show Output",
+        );
+        if (action === "Show Output") { output.show(); }
+        return;
       }
 
-      // Always setup networking (hosts + SSL cert) regardless of health check result.
+      if (readyResult === "timeout") {
+        output.appendLine(`\nThe container is still running - attempting networking setup now.`);
+        output.appendLine(`BC may not accept connections yet if initialization is still in progress.`);
+      }
+
+      // Setup networking (hosts + SSL cert) — only reached for "ready" and "timeout"
       output.appendLine(`\nSetting up networking (hosts file + SSL certificate)...`);
       const netOk = await this._docker.setupContainerNetworking(name);
       if (!netOk) {

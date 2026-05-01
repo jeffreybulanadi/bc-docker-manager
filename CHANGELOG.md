@@ -25,6 +25,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 - Container name input now rejects uppercase letters at creation time. BC uses the container name as a DNS hostname and as the CN of its self-signed SSL certificate. Uppercase letters are not valid in hostnames per RFC 952 and 1123, and using them caused networking setup to fail silently. A warning is shown if the name contains underscores, which are also not valid in DNS hostnames and can break certificate validation.
 
+- When a container stops or dies before BC finishes initializing, the creation flow now shows the last 50 lines of container logs in the output channel so the cause is visible immediately. Common reasons (not enough memory, missing license, incompatible artifact) are listed as a hint. Networking setup is skipped entirely in this case instead of attempting it and producing a misleading "Cannot determine IP" error. A timeout (container still running but BC not yet healthy) continues to attempt networking as before.
+
 ---
 
 ## [1.4.0] - 2026-05-01
