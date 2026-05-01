@@ -73,6 +73,7 @@ const Uri = {
 const ViewColumn = { One: 1, Two: 2, Three: 3, Active: -1, Beside: -2 };
 const ProgressLocation = { Notification: 15 };
 const TreeItemCollapsibleState = { None: 0, Collapsed: 1, Expanded: 2 };
+const ConfigurationTarget = { Global: 1, Workspace: 2, WorkspaceFolder: 3 };
 
 class TreeItem {
   label: string | undefined;
@@ -100,6 +101,6 @@ class EventEmitter {
 
 module.exports = {
   window, workspace, env, commands, Uri,
-  ViewColumn, ProgressLocation, TreeItemCollapsibleState,
+  ViewColumn, ProgressLocation, TreeItemCollapsibleState, ConfigurationTarget,
   TreeItem, ThemeIcon, ThemeColor, MarkdownString, EventEmitter,
 };

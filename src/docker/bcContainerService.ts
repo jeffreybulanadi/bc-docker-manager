@@ -1011,6 +1011,15 @@ export class BcContainerService {
     if (!selected) { return undefined; }
 
     const profile = profiles[selected.label];
+    const config = vscode.workspace.getConfiguration("bcDockerManager");
+    await config.update("defaultMemory", profile.memoryLimit, vscode.ConfigurationTarget.Global);
+    await config.update("defaultIsolation", profile.isolation, vscode.ConfigurationTarget.Global);
+    await config.update("defaultAuth", profile.auth, vscode.ConfigurationTarget.Global);
+    await config.update("defaultDns", profile.dns, vscode.ConfigurationTarget.Global);
+    if (profile.country) {
+      await config.update("defaultCountry", profile.country, vscode.ConfigurationTarget.Global);
+    }
+
     vscode.window.showInformationMessage(`Profile "${selected.label}" loaded.`);
     return profile;
   }
@@ -1032,6 +1041,99 @@ export class BcContainerService {
     delete profiles[selected.label];
     this.saveProfiles(profiles);
     vscode.window.showInformationMessage(`Profile "${selected.label}" deleted.`);
+  }
+
+  async editProfile(): Promise<void> {
+    const profiles = this.loadProfiles();
+    const keys = Object.keys(profiles);
+    if (keys.length === 0) {
+      vscode.window.showInformationMessage("No saved profiles. Use 'Save Container Profile' first.");
+      return;
+    }
+
+    const items = keys.map((k) => ({
+      label: profiles[k].name,
+      description: `${profiles[k].isolation} | ${profiles[k].memoryLimit} | ${profiles[k].auth}`,
+      detail: profiles[k].country ? `Country: ${profiles[k].country}` : undefined,
+    }));
+
+    const selected = await vscode.window.showQuickPick(items, {
+      title: "Edit Container Profile",
+      placeHolder: "Select a profile to edit",
+    });
+    if (!selected) { return; }
+
+    const existing = profiles[selected.label];
+
+    const memoryLimit = await vscode.window.showInputBox({
+      title: "Edit Container Profile",
+      prompt: "Memory limit",
+      value: existing.memoryLimit,
+      validateInput: (v) => v.trim() ? undefined : "Memory limit cannot be empty",
+    });
+    if (memoryLimit === undefined) { return; }
+
+    const isolationOptions = ["hyperv", "process"];
+    const isolationItems = [
+      { label: existing.isolation, description: "(current)" as string | undefined },
+      ...isolationOptions
+        .filter((o) => o !== existing.isolation)
+        .map((o) => ({ label: o, description: undefined as string | undefined })),
+    ];
+    const isolationPick = await vscode.window.showQuickPick(isolationItems, {
+      title: "Edit Container Profile",
+      placeHolder: "Isolation mode",
+    });
+    if (!isolationPick) { return; }
+
+    const authOptions = ["UserPassword", "Windows", "NavUserPassword"];
+    const authItems = [
+      { label: existing.auth, description: "(current)" as string | undefined },
+      ...authOptions
+        .filter((o) => o !== existing.auth)
+        .map((o) => ({ label: o, description: undefined as string | undefined })),
+    ];
+    const authPick = await vscode.window.showQuickPick(authItems, {
+      title: "Edit Container Profile",
+      placeHolder: "Authentication mode",
+    });
+    if (!authPick) { return; }
+
+    const dns = await vscode.window.showInputBox({
+      title: "Edit Container Profile",
+      prompt: "DNS server",
+      value: existing.dns,
+      validateInput: (v) => v.trim() ? undefined : "DNS cannot be empty",
+    });
+    if (dns === undefined) { return; }
+
+    const country = await vscode.window.showInputBox({
+      title: "Edit Container Profile",
+      prompt: "Country code (leave empty to clear)",
+      value: existing.country ?? "",
+    });
+    if (country === undefined) { return; }
+
+    const licensePath = await vscode.window.showInputBox({
+      title: "Edit Container Profile",
+      prompt: "Path to license file (leave empty to clear)",
+      value: existing.licensePath ?? "",
+    });
+    if (licensePath === undefined) { return; }
+
+    const updated: ContainerProfile = {
+      ...existing,
+      memoryLimit: memoryLimit.trim(),
+      isolation: isolationPick.label,
+      auth: authPick.label,
+      dns: dns.trim(),
+      country: country.trim() || undefined,
+      licensePath: licensePath.trim() || undefined,
+    };
+
+    profiles[selected.label] = updated;
+    this.saveProfiles(profiles);
+    vscode.window.showInformationMessage(`Profile "${selected.label}" updated.`);
   }
 
   // ── v1.4: Compile AL App ─────────────────────────────────────
