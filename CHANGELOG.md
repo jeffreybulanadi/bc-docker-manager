@@ -13,7 +13,11 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 - Edit Container Profile command. Previously the only way to update a saved profile was to overwrite it by saving again with the same name, which required retyping every field from scratch. The new Edit command loads an existing profile into a step-by-step flow with each field pre-filled so you only change what you need. Isolation and authentication modes are shown as a pick list with the current value highlighted. Leaving country or license path empty clears those optional fields.
 
+- Delete Container Profile command is now visible in the Containers panel toolbar menu alongside Save, Load, and Edit. Previously it was only reachable via the command palette.
+
 ### Changed
+
+- Load Container Profile now writes the stored values back to VS Code user settings immediately when you select a profile. Previously the profile was returned but the values were never applied, so loading a profile had no visible effect. Memory limit, isolation, auth, DNS, and country are all written on load. Country is only written when the profile includes one, to avoid clearing an existing country preference unintentionally.
 
 - All file transfers between the host and Hyper-V containers now go through a single persistent `docker exec` spawn instead of spawning a new PowerShell process per chunk. License upload, app publish, database backup, database restore, and AL compilation previously opened one process every 5-50 KB of data. On a 500 MB backup that was roughly 10,000 process starts at ~400 ms each. The transfer now streams through one long-lived process, keeping a 48 KB sliding window in memory regardless of file size, and completes in seconds rather than hours.
 

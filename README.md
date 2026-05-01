@@ -217,14 +217,28 @@ All file transfers run through a single streaming process, so backup and restore
 
 ### Profiles
 
-Save your container configuration (memory, isolation, auth, DNS, country, license path) and reapply it later:
+Save your container configuration (memory, isolation, auth, DNS, country, license path) and reapply it later. All four commands are under the **...** menu in the Containers panel header.
+
+<!-- SCREENSHOT: Containers panel ... menu open showing Save, Load, Edit, Delete Container Profile.
+     Save as: screenshots/profiles/profile-menus.jpg -->
+![Profile commands menu](screenshots/profiles/profile-menus.jpg)
 
 | Command | What it does |
 |---------|-------------|
-| **Save Container Profile** | Saves current config to global storage |
-| **Load Container Profile** | Creates a new container from a saved profile |
-| **Edit Container Profile** | Opens a saved profile and lets you change any field in place |
+| **Save Container Profile** | Saves current VS Code settings to a named profile |
+| **Load Container Profile** | Applies a saved profile, overwriting your VS Code settings immediately |
+| **Edit Container Profile** | Opens a saved profile with every field pre-filled so you only change what you need |
 | **Delete Container Profile** | Removes a saved profile |
+
+Loading a profile writes memory limit, isolation, auth, DNS, and country straight to your VS Code user settings. The next container you create picks them up automatically.
+
+<!-- SCREENSHOT: Load Container Profile quick pick showing profile name and details.
+     Save as: screenshots/profiles/load-profile.jpg -->
+![Load Container Profile](screenshots/profiles/load-profile.jpg)
+
+<!-- SCREENSHOT: VS Code Settings panel showing BC Docker Manager settings updated after load.
+     Save as: screenshots/profiles/profile-overwrites-user-settings-on-the-fly.jpg -->
+![Settings updated after loading profile](screenshots/profiles/profile-overwrites-user-settings-on-the-fly.jpg)
 
 ### Bulk Operations
 
