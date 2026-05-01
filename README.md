@@ -111,35 +111,33 @@ Right-click any container for the full action menu:
 
 Keep track of what each container is for by attaching tags and notes directly in the sidebar. No extra files or scripts needed - annotations are stored in VS Code global state and survive container restarts and recreations.
 
-### Tags
-
-Right-click any container and choose **Set Container Tags** to attach comma-separated labels.
-
-![Set Container Tags menu](https://raw.githubusercontent.com/jeffreybulanadi/bc-docker-manager/main/screenshots/tags/set-tags.jpg)
-
-Tags appear inline in the container list as `#tag1 #tag2` so you can identify containers at a glance.
-
-![Tags shown in container list](https://raw.githubusercontent.com/jeffreybulanadi/bc-docker-manager/main/screenshots/tags/tags-and-notes-set.jpg)
-
-### Notes
-
-Right-click any container and choose **Set Container Note** to attach a free-text note (e.g. "Client demo - do not remove" or "Restore from backup 2026-04-30").
-
-![Set Container Note menu](https://raw.githubusercontent.com/jeffreybulanadi/bc-docker-manager/main/screenshots/tags/set-notes.jpg)
-
-The note is shown at the bottom of the container tooltip when you hover over the container.
-
-### Combined view
-
 Tags and notes can be set together. Both appear in the sidebar immediately after saving.
 
-![Container with tags and note set](https://raw.githubusercontent.com/jeffreybulanadi/bc-docker-manager/main/screenshots/tags/set-notes-and-tags-menu.jpg)
+![Container with tags and note set](screenshots/tags/set-notes-and-tags-menu.jpg)
 
 | Command | What it does |
 |---------|-------------|
 | **Set Container Tags** | Attach comma-separated tags to a container |
 | **Set Container Note** | Attach a free-text note to a container |
 | **Clear Container Note and Tags** | Remove all annotations from a container |
+
+### Tags
+
+Right-click any container and choose **Set Container Tags** to attach comma-separated labels.
+
+![Set Container Tags menu](screenshots/tags/set-tags.jpg)
+
+Tags appear inline in the container list as `#tag1 #tag2` so you can identify containers at a glance.
+
+![Tags shown in container list](screenshots/tags/tags-and-notes-set.jpg)
+
+### Notes
+
+Right-click any container and choose **Set Container Note** to attach a free-text note (e.g. "Client demo - do not remove" or "Restore from backup 2026-04-30").
+
+![Set Container Note menu](screenshots/tags/set-notes.jpg)
+
+The note is shown at the bottom of the container tooltip when you hover over the container.
 
 ---
 
