@@ -9,6 +9,13 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [1.5.0] - 2026-05-01
 
+### Highlights
+
+- **Set Container Tags and Notes:** Attach tags and a free-text note to any container for at-a-glance organisation directly in the Containers panel.
+- **Smarter container diagnostics:** When a container stops before BC is ready, the last 50 log lines appear immediately so you can see exactly what went wrong.
+- **Safer container naming:** Uppercase letters are blocked at creation time to prevent DNS and SSL failures.
+- **What's New panel:** Release notes open automatically after each update. You can opt out via settings.
+
 ### Added
 
 - Set Container Note command. Right-click any container in the Containers panel and choose "Set Container Note" to attach a free-text note to it. The note is shown at the bottom of the container tooltip and persists in VS Code global state, surviving container restarts, recreations, and VS Code restarts.

@@ -80,8 +80,9 @@ const PAGE_CSS = `
 .rn-toc a:hover { opacity: 1; }
 
 /* ── header ── */
-.rn-header h1  { border-bottom: none; padding-bottom: 0; margin-bottom: 2px; font-size: 2em; }
-.rn-date       { opacity: .7; font-size: .9em; margin: 4px 0 0; }
+.rn-header h1     { border-bottom: none; padding-bottom: 0; margin-bottom: 4px; font-size: 2em; }
+.rn-tagline       { font-style: italic; opacity: .5; font-size: .88em; margin: 0 0 6px; }
+.rn-date          { opacity: .7; font-size: .9em; margin: 4px 0 0; }
 
 /* inline opt-out - matches VS Code's "Show release notes after an update" */
 .rn-setting    { display: inline-flex; align-items: center; gap: 8px; font-size: .9em; cursor: pointer; user-select: none; margin-top: 14px; }
@@ -103,6 +104,19 @@ const PAGE_CSS = `
   border-top: none; border-left: none; transform: rotate(45deg);
 }
 .rn-setting input[type=checkbox]:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; }
+
+/* ── social links ── */
+.rn-social { font-size: .85em; opacity: .65; margin-top: 10px; }
+.rn-social a { opacity: 1; }
+
+/* ── highlights / welcome block ── */
+.rn-welcome { margin: 1.5em 0 2em; padding: 16px 20px; border-radius: 4px; }
+.vscode-light .rn-welcome { background: rgba(0,0,0,.025); border: 1px solid rgba(0,0,0,.08); }
+.vscode-dark  .rn-welcome { background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.08); }
+.rn-welcome-intro { margin: 0 0 12px; line-height: 1.6; }
+.rn-highlights { margin: 0 0 12px; padding-left: 20px; }
+.rn-highlights li { margin: 6px 0; line-height: 1.5; }
+.rn-happy-coding { margin: 0; font-style: italic; opacity: .75; }
 
 /* ── screenshots ── */
 .rn-figure { margin: 16px 0; }
@@ -351,15 +365,36 @@ function renderSidebar(r: Release): string {
   return `<nav class="rn-toc"><p>In this update</p><ul>${items}</ul></nav>`;
 }
 
+const SOCIAL_LINKS =
+  '<a href="https://www.linkedin.com/in/jeffreybulanadi/">LinkedIn</a>' +
+  ' | <a href="https://x.com/JeffreyBulanadi">X</a>' +
+  ' | <a href="https://bsky.app/profile/jeffreybulanadi.bsky.social">Bluesky</a>' +
+  ' | <a href="https://learnbeyondbc.com">learnbeyondbc.com</a>';
+
 function renderCurrentMain(r: Release, checked: string, toUri: (rel: string) => string): string {
   const sections = r.sections
-    .map(s => `<h2 id="${slug(s.name)}">${esc(s.name)}</h2>${renderSectionItems(s.items, toUri)}`)
+    .map(s => {
+      if (s.name.toLowerCase() === "highlights") {
+        const bullets = s.items
+          .filter((item): item is SectionText => item.kind === "text")
+          .map(item => `<li>${inline(item.text)}</li>`)
+          .join("");
+        return `<div id="${slug(s.name)}" class="rn-welcome">
+<p class="rn-welcome-intro">Welcome to <strong>BC Docker Manager ${esc(r.version)}</strong>. Here are the highlights for this release:</p>
+<ul class="rn-highlights">${bullets}</ul>
+<p class="rn-happy-coding">Happy Coding!</p>
+</div>`;
+      }
+      return `<h2 id="${slug(s.name)}">${esc(s.name)}</h2>${renderSectionItems(s.items, toUri)}`;
+    })
     .join("");
 
   return `<div class="rn-header">
 <h1>BC Docker Manager ${esc(r.version)}</h1>
+<p class="rn-tagline">Written by a developer, for developers.</p>
 <p class="rn-date">Release date: ${esc(r.fmtDate)}</p>
 <label class="rn-setting"><input type="checkbox" id="chk"${checked}> Show release notes after an update</label>
+<p class="rn-social">Follow on ${SOCIAL_LINKS}</p>
 </div>
 ${sections}`;
 }
