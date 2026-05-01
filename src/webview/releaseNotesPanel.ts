@@ -380,7 +380,7 @@ function renderCurrentMain(r: Release, checked: string, toUri: (rel: string) => 
         return `<div id="${slug(s.name)}" class="rn-welcome">
 <p class="rn-welcome-intro">Welcome to <strong>BC Docker Manager ${esc(r.version)}</strong>. Here are the highlights for this release:</p>
 <ul class="rn-highlights">${bullets}</ul>
-<p class="rn-happy-coding">Happy Coding!</p>
+<p class="rn-happy-coding">Written by a developer, for developers.</p>
 </div><hr>`;
       }
       return `<h2 id="${slug(s.name)}">${esc(s.name)}</h2>${renderSectionItems(s.items, toUri)}`;
@@ -389,7 +389,6 @@ function renderCurrentMain(r: Release, checked: string, toUri: (rel: string) => 
 
   return `<div class="rn-header">
 <h1>BC Docker Manager ${esc(r.version)}</h1>
-<p class="rn-tagline">Written by a developer, for developers.</p>
 <p class="rn-date">Release date: ${esc(r.fmtDate)}</p>
 <label class="rn-setting"><input type="checkbox" id="chk"${checked}> Show release notes after an update</label>
 <p class="rn-social">Follow on ${SOCIAL_LINKS}</p>
