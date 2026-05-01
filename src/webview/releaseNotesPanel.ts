@@ -7,14 +7,19 @@ const EXTENSION_ID = "jeffreybulanadi.bc-docker-manager";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface ReleaseSection { name: string; items: string[]; }
+interface SectionText  { kind: "text";  text: string; }
+interface SectionImage { kind: "image"; alt: string; src: string; }
+type SectionItem = SectionText | SectionImage;
+
+interface ReleaseSection { name: string; items: SectionItem[]; }
 interface Release        { version: string; fmtDate: string; sections: ReleaseSection[]; }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 // Verbatim from VS Code markdownDocumentRenderer.ts DEFAULT_MARKDOWN_STYLES.
+// body: layout div controls max-width/padding instead of body directly.
 const BASE_CSS = `
-body { padding: 10px 20px; line-height: 22px; max-width: 882px; margin: 0 auto; }
+body { padding: 0; line-height: 22px; max-width: none; margin: 0; }
 body *:last-child { margin-bottom: 0; }
 img  { max-width: 100%; max-height: 100%; }
 a    { text-decoration: var(--text-link-decoration); }
@@ -44,6 +49,36 @@ pre code {
 `;
 
 const PAGE_CSS = `
+/* ── two-column layout ── */
+.rn-layout { display: flex; min-height: 100vh; }
+.rn-sidebar {
+  width: 200px; flex-shrink: 0;
+  padding: 20px 0 20px 20px;
+  box-sizing: border-box;
+}
+.rn-main {
+  flex: 1; min-width: 0;
+  padding: 20px 40px 40px;
+  max-width: 860px;
+  box-sizing: border-box;
+}
+
+/* ── sticky TOC sidebar ── */
+.rn-toc { position: sticky; top: 20px; }
+.rn-toc > p {
+  font-size: .72em; font-weight: 600; opacity: .55;
+  text-transform: uppercase; letter-spacing: .07em;
+  margin: 0 0 10px;
+}
+.rn-toc > ul { margin: 0; padding: 0; list-style: none; }
+.rn-toc > ul > li { margin: 3px 0; }
+.rn-toc a {
+  text-decoration: none; opacity: .7; font-size: .88em;
+  display: block; padding: 2px 0;
+  color: var(--vscode-foreground);
+}
+.rn-toc a:hover { opacity: 1; }
+
 /* ── header ── */
 .rn-header h1  { border-bottom: none; padding-bottom: 0; margin-bottom: 2px; font-size: 2em; }
 .rn-date       { opacity: .7; font-size: .9em; margin: 4px 0 0; }
@@ -69,13 +104,12 @@ const PAGE_CSS = `
 }
 .rn-setting input[type=checkbox]:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; }
 
-/* ── table of contents - matches VS Code "In this update" box ── */
-.rn-toc { margin: 2em 0; padding: 14px 20px; border-radius: 3px; border: 1px solid; }
-.vscode-light .rn-toc { border-color: rgba(0,0,0,.12); background: rgba(0,0,0,.025); }
-.vscode-dark  .rn-toc { border-color: rgba(255,255,255,.12); background: rgba(255,255,255,.025); }
-.rn-toc > p  { font-weight: 600; margin: 0 0 8px; }
-.rn-toc > ul { margin: 0; padding-left: 20px; }
-.rn-toc > ul > li { margin: 3px 0; }
+/* ── screenshots ── */
+.rn-figure { margin: 16px 0; }
+.rn-figure img { border-radius: 4px; max-height: 360px; object-fit: contain; }
+.vscode-light .rn-figure img { box-shadow: 0 1px 4px rgba(0,0,0,.2); }
+.vscode-dark  .rn-figure img { box-shadow: 0 1px 6px rgba(0,0,0,.5); }
+.rn-figure figcaption { font-size: .82em; opacity: .6; margin-top: 5px; }
 
 /* ── previous releases ── */
 .rn-older-label { font-size: .82em; opacity: .55; text-transform: uppercase; letter-spacing: .07em; margin: 2.5em 0 8px; }
@@ -113,13 +147,21 @@ export class ReleaseNotesPanel {
       ? `BC Docker Manager ${releases[0].version} - Release Notes`
       : "BC Docker Manager - Release Notes";
 
+    const extUri = ReleaseNotesPanel._extensionUri!;
     this._panel = vscode.window.createWebviewPanel(
       "bcDockerManager.releaseNotes",
       label,
       vscode.ViewColumn.One,
-      { enableScripts: true },
+      { enableScripts: true, localResourceRoots: [extUri] },
     );
-    this._panel.webview.html = buildHtml(releases, showOnUpdate);
+
+    const toUri = (rel: string): string => {
+      try {
+        return this._panel.webview.asWebviewUri(vscode.Uri.joinPath(extUri, rel)).toString();
+      } catch { return ""; }
+    };
+
+    this._panel.webview.html = buildHtml(this._panel.webview, releases, showOnUpdate, toUri);
 
     this._panel.webview.onDidReceiveMessage((msg) => {
       if (msg.command === "setShowOnUpdate") {
@@ -224,12 +266,16 @@ function parseChangelog(md: string): Release[] {
       const sHead = sec.match(/^### (.+)/);
       if (!sHead) { continue; }
 
-      const items = sec
-        .split("\n")
-        .slice(1)
-        .filter(l => l.startsWith("- "))
-        .map(l => l.slice(2).trim())
-        .filter(Boolean);
+      const items: SectionItem[] = [];
+      for (const l of sec.split("\n").slice(1)) {
+        if (l.startsWith("- ") || l.startsWith("* ")) {
+          const text = l.slice(2).trim();
+          if (text) { items.push({ kind: "text", text }); }
+        } else {
+          const imgM = l.match(/^!\[([^\]]*)\]\(([^)]+)\)\s*$/);
+          if (imgM) { items.push({ kind: "image", alt: imgM[1], src: imgM[2] }); }
+        }
+      }
 
       if (items.length) { sections.push({ name: sHead[1].trim(), items }); }
     }
@@ -249,19 +295,31 @@ function parseChangelog(md: string): Release[] {
 
 // ── HTML builder ──────────────────────────────────────────────────────────────
 
-function buildHtml(releases: Release[], showOnUpdate: boolean): string {
+function buildHtml(
+  webview: vscode.Webview,
+  releases: Release[],
+  showOnUpdate: boolean,
+  toUri: (rel: string) => string,
+): string {
   const nonce   = crypto.randomBytes(16).toString("hex");
   const checked = showOnUpdate ? " checked" : "";
 
   const csp = [
     "default-src 'none'",
+    `img-src ${webview.cspSource}`,
     "style-src 'unsafe-inline'",
     `script-src 'nonce-${nonce}'`,
   ].join("; ");
 
-  const body = releases.length
-    ? renderCurrent(releases[0], checked) + renderOlderList(releases.slice(1))
-    : "<p>No release notes available.</p>";
+  let body: string;
+  if (releases.length) {
+    const sidebar = renderSidebar(releases[0]);
+    const main    = renderCurrentMain(releases[0], checked, toUri)
+                  + renderOlderList(releases.slice(1), toUri);
+    body = `<aside class="rn-sidebar">${sidebar}</aside><main class="rn-main">${main}</main>`;
+  } else {
+    body = `<main class="rn-main"><p>No release notes available.</p></main>`;
+  }
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -273,7 +331,9 @@ function buildHtml(releases: Release[], showOnUpdate: boolean): string {
 <style>${BASE_CSS}${PAGE_CSS}</style>
 </head>
 <body>
+<div class="rn-layout">
 ${body}
+</div>
 <script nonce="${nonce}">(function(){
   var api = acquireVsCodeApi();
   document.getElementById("chk").addEventListener("change", function(e){
@@ -284,15 +344,16 @@ ${body}
 </html>`;
 }
 
-function renderCurrent(r: Release, checked: string): string {
-  const tocItems = r.sections
+function renderSidebar(r: Release): string {
+  const items = r.sections
     .map(s => `<li><a href="#${slug(s.name)}">${esc(s.name)}</a></li>`)
     .join("");
+  return `<nav class="rn-toc"><p>In this update</p><ul>${items}</ul></nav>`;
+}
 
+function renderCurrentMain(r: Release, checked: string, toUri: (rel: string) => string): string {
   const sections = r.sections
-    .map(s => `<h2 id="${slug(s.name)}">${esc(s.name)}</h2><ul>${
-      s.items.map(i => `<li>${inline(i)}</li>`).join("")
-    }</ul>`)
+    .map(s => `<h2 id="${slug(s.name)}">${esc(s.name)}</h2>${renderSectionItems(s.items, toUri)}`)
     .join("");
 
   return `<div class="rn-header">
@@ -300,18 +361,34 @@ function renderCurrent(r: Release, checked: string): string {
 <p class="rn-date">Release date: ${esc(r.fmtDate)}</p>
 <label class="rn-setting"><input type="checkbox" id="chk"${checked}> Show release notes after an update</label>
 </div>
-<nav class="rn-toc"><p>In this update</p><ul>${tocItems}</ul></nav>
 ${sections}`;
 }
 
-function renderOlderList(older: Release[]): string {
+function renderSectionItems(items: SectionItem[], toUri: (rel: string) => string): string {
+  const out: string[] = [];
+  let inList = false;
+  for (const item of items) {
+    if (item.kind === "image") {
+      if (inList) { out.push("</ul>"); inList = false; }
+      const uri = toUri(item.src);
+      if (uri) {
+        out.push(`<figure class="rn-figure"><img src="${uri}" alt="${esc(item.alt)}" loading="lazy"><figcaption>${esc(item.alt)}</figcaption></figure>`);
+      }
+    } else {
+      if (!inList) { out.push("<ul>"); inList = true; }
+      out.push(`<li>${inline(item.text)}</li>`);
+    }
+  }
+  if (inList) { out.push("</ul>"); }
+  return out.join("");
+}
+
+function renderOlderList(older: Release[], toUri: (rel: string) => string): string {
   if (!older.length) { return ""; }
 
   const items = older.map(r => {
     const sections = r.sections
-      .map(s => `<h3>${esc(s.name)}</h3><ul>${
-        s.items.map(i => `<li>${inline(i)}</li>`).join("")
-      }</ul>`)
+      .map(s => `<h3>${esc(s.name)}</h3>${renderSectionItems(s.items, toUri)}`)
       .join("");
 
     return `<details class="rn-older">

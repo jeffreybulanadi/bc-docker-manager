@@ -15,6 +15,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 - Set Container Tags command. Right-click any container and choose "Set Container Tags" to attach one or more comma-separated tags (e.g. `client1, sandbox, v25`). Tags are shown as `#tag1 #tag2` appended to the container description line in the Containers panel so they are visible at a glance without hovering. Requested by [@omerfaruknav](https://github.com/omerfaruknav) in [#4](https://github.com/jeffreybulanadi/bc-docker-manager/issues/4).
 
+![Containers panel with tags and notes visible on a container](screenshots/tags/tags-and-notes-set.jpg)
+
 - Clear Container Note and Tags command. Removes all annotations from a container in one step.
 
 - What's New panel. Opens automatically the first time VS Code starts after a new version is installed, showing a summary of changes for that version. The panel can be reopened any time via **BC Docker Manager: What's New** in the Command Palette. Set `bcDockerManager.showReleaseNotesOnUpdate` to `false` to disable the automatic opening.
@@ -41,6 +43,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 ### Added
 
 - Edit Container Profile command. Previously the only way to update a saved profile was to overwrite it by saving again with the same name, which required retyping every field from scratch. The new Edit command loads an existing profile into a step-by-step flow with each field pre-filled so you only change what you need. Isolation and authentication modes are shown as a pick list with the current value highlighted. Leaving country or license path empty clears those optional fields. Requested by [@thatnavguy](https://github.com/thatnavguy) in [#7](https://github.com/jeffreybulanadi/bc-docker-manager/issues/7).
+
+![Container profiles context menu showing Save, Load, Edit, and Delete options](screenshots/profiles/profile-menus.jpg)
 
 - Delete Container Profile command is now visible in the Containers panel toolbar menu alongside Save, Load, and Edit. Previously it was only reachable via the command palette.
 
