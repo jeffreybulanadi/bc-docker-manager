@@ -693,6 +693,68 @@ describe("deleteProfile", () => {
   });
 });
 
+// ─── backupDatabase edition detection ────────────────────────────
+
+describe("backupDatabase edition detection", () => {
+  beforeEach(() => {
+    (vscode.window.showSaveDialog as jest.Mock).mockResolvedValue(
+      vscode.Uri.file("C:\\backups\\mybc_backup.bak"),
+    );
+  });
+
+  it("uses WITH FORMAT COMPRESSION on non-Express editions", async () => {
+    fakeExecOk(JSON.stringify({ ServerInstance: "BC", DatabaseName: "MyDB" })); // getContainerInfo
+    fakeExecOk("3\n"); // EngineEdition = 3 (Enterprise)
+    fakeExecOk("");    // New-Item temp dir
+    fakeExecOk("");    // BACKUP DATABASE
+    // readFileFromContainer: size query + read chunk
+    fakeExecOk("0\n");
+    mockFs.writeFileSync.mockImplementation(() => {});
+    fakeExecOk(""); // cleanup
+
+    await svc.backupDatabase("mybc");
+
+    const calls: string[] = mockExec.mock.calls.map((c: any[]) => c[0] as string);
+    const backupCall = calls.find(c => c.includes("BACKUP DATABASE"));
+    expect(backupCall).toBeDefined();
+    expect(backupCall).toContain("WITH FORMAT, COMPRESSION");
+  });
+
+  it("uses WITH FORMAT only on SQL Server Express (EngineEdition 4)", async () => {
+    fakeExecOk(JSON.stringify({ ServerInstance: "BC", DatabaseName: "MyDB" })); // getContainerInfo
+    fakeExecOk("4\n"); // EngineEdition = 4 (Express)
+    fakeExecOk("");    // New-Item temp dir
+    fakeExecOk("");    // BACKUP DATABASE
+    fakeExecOk("0\n");
+    mockFs.writeFileSync.mockImplementation(() => {});
+    fakeExecOk(""); // cleanup
+
+    await svc.backupDatabase("mybc");
+
+    const calls: string[] = mockExec.mock.calls.map((c: any[]) => c[0] as string);
+    const backupCall = calls.find(c => c.includes("BACKUP DATABASE"));
+    expect(backupCall).toBeDefined();
+    expect(backupCall).not.toContain("COMPRESSION");
+  });
+
+  it("defaults to WITH FORMAT COMPRESSION when edition check fails", async () => {
+    fakeExecOk(JSON.stringify({ ServerInstance: "BC", DatabaseName: "MyDB" })); // getContainerInfo
+    fakeExecFail("cmdlet not found"); // edition check fails
+    fakeExecOk("");    // New-Item temp dir
+    fakeExecOk("");    // BACKUP DATABASE
+    fakeExecOk("0\n");
+    mockFs.writeFileSync.mockImplementation(() => {});
+    fakeExecOk(""); // cleanup
+
+    await svc.backupDatabase("mybc");
+
+    const calls: string[] = mockExec.mock.calls.map((c: any[]) => c[0] as string);
+    const backupCall = calls.find(c => c.includes("BACKUP DATABASE"));
+    expect(backupCall).toBeDefined();
+    expect(backupCall).toContain("WITH FORMAT, COMPRESSION");
+  });
+});
+
 // ─── getContainerStats ───────────────────────────────────────────
 
 describe("getContainerStats", () => {

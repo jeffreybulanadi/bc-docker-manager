@@ -468,14 +468,27 @@ export class BcContainerService {
       { location: vscode.ProgressLocation.Notification, title: "Backing up database…" },
       async (progress) => {
         progress.report({ message: "Creating backup inside container…" });
-        const { serverInstance, dbName } = await this.getContainerInfo(containerName);
+        const { dbName } = await this.getContainerInfo(containerName);
+
+        // Detect SQL Server Express (EngineEdition = 4) and create temp dir in parallel.
+        // Express does not support BACKUP WITH COMPRESSION; all other editions do.
+        const [editionRaw] = await Promise.all([
+          this.execInContainer(
+            containerName,
+            `(Invoke-Sqlcmd -Query "SELECT SERVERPROPERTY('EngineEdition') AS e").e`,
+            15_000,
+          ).catch(() => ""),
+          this.execInContainer(
+            containerName,
+            `New-Item -Path 'C:\\temp' -ItemType Directory -Force -ErrorAction SilentlyContinue | Out-Null`,
+            15_000,
+          ).catch(() => {}),
+        ]);
+        const bakOptions = editionRaw.trim() === "4" ? "WITH FORMAT" : "WITH FORMAT, COMPRESSION";
 
         await this.execInContainer(
           containerName,
-          [
-            `New-Item -Path 'C:\\temp' -ItemType Directory -Force -ErrorAction SilentlyContinue | Out-Null;`,
-            `Invoke-Sqlcmd -Query "BACKUP DATABASE [${dbName}] TO DISK='${containerBakPath}' WITH FORMAT, COMPRESSION"`,
-          ].join(" "),
+          `Invoke-Sqlcmd -Query "BACKUP DATABASE [${dbName}] TO DISK='${containerBakPath}' ${bakOptions}"`,
           600_000, // 10 min timeout for large DBs
         );
 
