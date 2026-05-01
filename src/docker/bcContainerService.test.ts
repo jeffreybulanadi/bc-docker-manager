@@ -685,7 +685,40 @@ describe("loadProfile", () => {
     );
   });
 
-  it("shows QuickPick and returns selected profile", async () => {
+  it("shows QuickPick, writes settings, and returns selected profile", async () => {
+    const profiles = {
+      dev: {
+        name: "dev",
+        memoryLimit: "8G",
+        isolation: "hyperv",
+        auth: "UserPassword",
+        dns: "8.8.8.8",
+        country: "us",
+        createdAt: "2024-01-01T00:00:00.000Z",
+      },
+    };
+    (mockFs.existsSync as jest.Mock).mockReturnValue(true);
+    (mockFs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify(profiles));
+    (vscode.window.showQuickPick as jest.Mock).mockResolvedValueOnce({
+      label: "dev",
+      description: "hyperv | 8G | UserPassword",
+    });
+
+    const result = await svc.loadProfile();
+    expect(result).toEqual(profiles.dev);
+
+    const cfg = vscode.workspace.getConfiguration("bcDockerManager");
+    expect(cfg.update).toHaveBeenCalledWith("defaultMemory", "8G", expect.anything());
+    expect(cfg.update).toHaveBeenCalledWith("defaultIsolation", "hyperv", expect.anything());
+    expect(cfg.update).toHaveBeenCalledWith("defaultAuth", "UserPassword", expect.anything());
+    expect(cfg.update).toHaveBeenCalledWith("defaultDns", "8.8.8.8", expect.anything());
+    expect(cfg.update).toHaveBeenCalledWith("defaultCountry", "us", expect.anything());
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      'Profile "dev" loaded.',
+    );
+  });
+
+  it("does not write defaultCountry when profile has no country", async () => {
     const profiles = {
       dev: {
         name: "dev",
@@ -703,11 +736,13 @@ describe("loadProfile", () => {
       description: "hyperv | 8G | UserPassword",
     });
 
-    const result = await svc.loadProfile();
-    expect(result).toEqual(profiles.dev);
-    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-      'Profile "dev" loaded.',
+    await svc.loadProfile();
+
+    const cfg = vscode.workspace.getConfiguration("bcDockerManager");
+    const countryCalls = (cfg.update as jest.Mock).mock.calls.filter(
+      (c: any[]) => c[0] === "defaultCountry",
     );
+    expect(countryCalls).toHaveLength(0);
   });
 
   it("returns undefined when user cancels QuickPick", async () => {

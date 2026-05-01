@@ -1011,6 +1011,15 @@ export class BcContainerService {
     if (!selected) { return undefined; }
 
     const profile = profiles[selected.label];
+    const config = vscode.workspace.getConfiguration("bcDockerManager");
+    await config.update("defaultMemory", profile.memoryLimit, vscode.ConfigurationTarget.Global);
+    await config.update("defaultIsolation", profile.isolation, vscode.ConfigurationTarget.Global);
+    await config.update("defaultAuth", profile.auth, vscode.ConfigurationTarget.Global);
+    await config.update("defaultDns", profile.dns, vscode.ConfigurationTarget.Global);
+    if (profile.country) {
+      await config.update("defaultCountry", profile.country, vscode.ConfigurationTarget.Global);
+    }
+
     vscode.window.showInformationMessage(`Profile "${selected.label}" loaded.`);
     return profile;
   }
