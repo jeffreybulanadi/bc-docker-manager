@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Unit tests for ImageProvider.
  */
 
@@ -129,9 +129,9 @@ describe("ImageProvider.getTreeItem", () => {
   });
 });
 
-// ─── getChildren — multiple images ───────────────────────────────
+// ─── getChildren - multiple images ───────────────────────────────
 
-describe("ImageProvider.getChildren — multiple images", () => {
+describe("ImageProvider.getChildren - multiple images", () => {
   const images: DockerImage[] = [
     { repository: "mcr.microsoft.com/businesscentral", tag: "ltsc2022", id: "sha256:aaa", size: "10GB", createdAt: "2024-01-01" },
     { repository: "mcr.microsoft.com/businesscentral", tag: "ltsc2019", id: "sha256:bbb", size: "12GB", createdAt: "2024-01-02" },
@@ -162,9 +162,9 @@ describe("ImageProvider.getChildren — multiple images", () => {
   });
 });
 
-// ─── getChildren — untagged images ───────────────────────────────
+// ─── getChildren - untagged images ───────────────────────────────
 
-describe("ImageProvider.getChildren — untagged images", () => {
+describe("ImageProvider.getChildren - untagged images", () => {
   const untaggedImage: DockerImage = {
     repository: "<none>",
     tag: "<none>",
@@ -201,8 +201,8 @@ describe("ImageProvider.getChildren — untagged images", () => {
 
 // ─── refresh fires event after toggle ────────────────────────────
 
-describe("ImageProvider — refresh fires event after toggle", () => {
-  it("toggleBcFilter implicitly calls refresh — event emitter fires", () => {
+describe("ImageProvider - refresh fires event after toggle", () => {
+  it("toggleBcFilter implicitly calls refresh - event emitter fires", () => {
     const provider = new ImageProvider(createMockDocker());
     const emitter = (provider as any)._onDidChangeTreeData;
 

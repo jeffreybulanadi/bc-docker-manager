@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Unit tests for DockerService.
  *
  * Tests focus on:
@@ -96,7 +96,7 @@ describe("DockerService.looksLikeBcImage", () => {
   });
 
   it("does NOT match 'bc' inside a longer word", () => {
-    // 'backup-tool' should not match — 'bc' is not a delimited segment
+    // 'backup-tool' should not match - 'bc' is not a delimited segment
     // Note: "backup" contains 'bac' not 'bc', but "object" contains 'bc' as a subsequence not segment
     expect(fn("objectstorage:latest")).toBe(false);
   });
@@ -193,6 +193,16 @@ describe("DockerService.buildRunArgs", () => {
   it("uses provided memoryLimit", () => {
     const args = buildArgs({ ...baseOpts, memoryLimit: "16G" });
     expect(args[args.indexOf("--memory") + 1]).toBe("16G");
+  });
+
+  it("appends G when memoryLimit has no unit suffix", () => {
+    const args = buildArgs({ ...baseOpts, memoryLimit: "8" });
+    expect(args[args.indexOf("--memory") + 1]).toBe("8G");
+  });
+
+  it("preserves lowercase unit suffix in memoryLimit", () => {
+    const args = buildArgs({ ...baseOpts, memoryLimit: "4g" });
+    expect(args[args.indexOf("--memory") + 1]).toBe("4g");
   });
 
   it("defaults isolation to hyperv", () => {
@@ -336,10 +346,17 @@ describe("DockerService.getContainerIp", () => {
 
   afterEach(() => jest.restoreAllMocks());
 
-  it("returns a valid IP address", async () => {
+  it("returns a valid IP from the nat network", async () => {
     jest.spyOn(svc, "exec").mockResolvedValue("172.17.0.5\n");
     const ip = await svc.getContainerIp("mybc");
     expect(ip).toBe("172.17.0.5");
+  });
+
+  it("returns undefined when docker outputs a non-IPv4 string", async () => {
+    // Simulates the 'invalid IP' daemon warning scenario
+    jest.spyOn(svc, "exec").mockResolvedValue("invalid IP\n");
+    const ip = await svc.getContainerIp("mybc");
+    expect(ip).toBeUndefined();
   });
 
   it("returns undefined for <no value>", async () => {
@@ -358,6 +375,23 @@ describe("DockerService.getContainerIp", () => {
     jest.spyOn(svc, "exec").mockRejectedValue(new Error("docker not found"));
     const ip = await svc.getContainerIp("mybc");
     expect(ip).toBeUndefined();
+  });
+
+  it("falls back to the bridge network when nat has no value", async () => {
+    jest.spyOn(svc, "exec")
+      .mockResolvedValueOnce("<no value>\n")   // nat
+      .mockResolvedValueOnce("192.168.1.5\n"); // bridge
+    const ip = await svc.getContainerIp("mybc");
+    expect(ip).toBe("192.168.1.5");
+  });
+
+  it("uses range-based fallback when named networks return no value", async () => {
+    jest.spyOn(svc, "exec")
+      .mockResolvedValueOnce("<no value>\n")        // nat
+      .mockResolvedValueOnce("<no value>\n")        // bridge
+      .mockResolvedValueOnce("10.0.0.2  \n");      // range fallback
+    const ip = await svc.getContainerIp("mybc");
+    expect(ip).toBe("10.0.0.2");
   });
 });
 
@@ -378,7 +412,7 @@ describe("DockerService.buildHostsScript", () => {
     // The dollar-sign anchor ($) at line end is part of the regex pattern,
     // but special chars in the name like '.' and '+' should not appear raw
     // in the -notmatch pattern. The current implementation uses the name
-    // directly — this test documents that behaviour.
+    // directly - this test documents that behaviour.
     expect(script).toContain("my.bc+test");
   });
 
@@ -673,7 +707,7 @@ describe("DockerService.parseImageLines (missing fields)", () => {
 describe("DockerService.enrichWithLabels (additional cases)", () => {
   afterEach(() => jest.restoreAllMocks());
 
-  it("inspect returns entry with missing Config key — labels stay empty", async () => {
+  it("inspect returns entry with missing Config key - labels stay empty", async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const svc = new DockerService() as any;
     const containers = [
@@ -687,7 +721,7 @@ describe("DockerService.enrichWithLabels (additional cases)", () => {
     expect(containers[0].labels).toEqual({});
   });
 
-  it("inspect returns malformed JSON string — labels stay empty", async () => {
+  it("inspect returns malformed JSON string - labels stay empty", async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const svc = new DockerService() as any;
     const containers = [

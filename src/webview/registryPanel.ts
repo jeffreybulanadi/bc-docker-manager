@@ -1,10 +1,10 @@
-import * as vscode from "vscode";
+﻿import * as vscode from "vscode";
 import {
   BcArtifactsService,
   BcArtifactType,
   BcArtifactVersion,
 } from "../registry/bcArtifactsService";
-import { DockerService } from "../docker/dockerService";
+import { ContainerReadyResult, DockerService } from "../docker/dockerService";
 import { DockerSetup } from "../docker/dockerSetup";
 import { LaunchJsonService } from "../docker/launchJsonService";
 import { ContainerProvider } from "../tree/containerProvider";
@@ -59,7 +59,7 @@ export class RegistryPanel {
 
     this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
 
-    // Set HTML — external JS sends "ready" once loaded
+    // Set HTML - external JS sends "ready" once loaded
     this._panel.webview.html = this._getHtml();
 
     // Failsafe: if "ready" never arrives, init after 2 s
@@ -167,17 +167,38 @@ export class RegistryPanel {
     const defaultName = `bc${version.split(".")[0]}${country}`;
     const name = await vscode.window.showInputBox({
       title: "Create BC Container (1/3): Name",
-      prompt: "Container name (lowercase, no spaces)",
+      prompt: "Container name (lowercase letters, numbers, dash or dot - BC uses this as the hostname)",
       value: defaultName,
       validateInput: (v) => {
         if (!v) { return "Name is required"; }
-        if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(v)) {
-          return "Invalid container name. Use letters, numbers, dash, dot, or underscore";
+        if (/[A-Z]/.test(v)) {
+          return "Container name must be lowercase. BC uses the name as a hostname - uppercase letters are not valid.";
+        }
+        if (!/^[a-z0-9][a-z0-9.-]*$/.test(v)) {
+          return "Invalid container name. Use lowercase letters, numbers, dash, or dot.";
+        }
+        if (v.includes("_")) {
+          return {
+            message: "Underscores are not valid in DNS hostnames and can cause SSL and networking issues. Consider using a dash instead.",
+            severity: vscode.InputBoxValidationSeverity.Warning,
+          };
         }
         return undefined;
       },
     });
-    if (!name) { return; } // cancelled
+    if (!name) { return; }
+    if (/[A-Z]/.test(name)) {
+      vscode.window.showErrorMessage("Container name must be lowercase - BC uses the name as a hostname.");
+      return;
+    }
+    if (name.includes("_")) {
+      vscode.window.showErrorMessage("Underscores are not valid in DNS hostnames and will cause SSL and networking issues. Use a dash instead.");
+      return;
+    }
+    if (!/^[a-z0-9][a-z0-9.-]*$/.test(name)) {
+      vscode.window.showErrorMessage("Invalid container name. Use lowercase letters, numbers, dash, or dot.");
+      return;
+    }
 
     // 3. Credentials
     const username = await vscode.window.showInputBox({
@@ -253,8 +274,7 @@ export class RegistryPanel {
       // Phase 2: Wait for the container to fully initialize.
       // The progress toast is cancellable: cancelling sends a CancellationToken
       // into waitForContainerReady which exits the polling loop, then we clean up.
-      let cancelled = false;
-      const containerReady = await vscode.window.withProgress(
+      const readyResult: ContainerReadyResult = await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
           title: `Initializing "${name}"`,
@@ -273,32 +293,39 @@ export class RegistryPanel {
               this._containerProvider.setContainerPhase(name, phase);
             },
             token,
-          ).then((result) => {
-            if (token.isCancellationRequested) { cancelled = true; }
-            return result;
-          });
+          );
         },
       );
 
-      if (cancelled) {
+      this._containerProvider.clearContainerPhase(name);
+      vscode.commands.executeCommand("bcDockerManager.refresh");
+
+      if (readyResult === "cancelled") {
         output.appendLine(`\nCancelled by user. Removing container "${name}"...`);
         await this._docker.removeContainer(name);
-        this._containerProvider.clearContainerPhase(name);
         vscode.commands.executeCommand("bcDockerManager.refresh");
         vscode.window.showInformationMessage(`Container creation cancelled. "${name}" has been removed.`);
         return;
       }
 
-      // Phase complete - clear the initializing state
-      this._containerProvider.clearContainerPhase(name);
-      vscode.commands.executeCommand("bcDockerManager.refresh");
-
-      if (!containerReady) {
-        output.appendLine(`\nWARNING: Health check timed out, but the container may still be initializing.`);
-        output.appendLine(`Proceeding with networking setup anyway...`);
+      if (readyResult === "exited") {
+        output.appendLine(`\nCommon causes: not enough memory, missing license, or an incompatible artifact URL.`);
+        output.appendLine(`The container has been left in place so you can inspect its logs.`);
+        output.appendLine(`Run "docker logs ${name}" for the full output.`);
+        const action = await vscode.window.showErrorMessage(
+          `Container "${name}" stopped before BC was ready. Check the creation output for details.`,
+          "Show Output",
+        );
+        if (action === "Show Output") { output.show(); }
+        return;
       }
 
-      // Always setup networking (hosts + SSL cert) regardless of health check result.
+      if (readyResult === "timeout") {
+        output.appendLine(`\nThe container is still running - attempting networking setup now.`);
+        output.appendLine(`BC may not accept connections yet if initialization is still in progress.`);
+      }
+
+      // Setup networking (hosts + SSL cert) — only reached for "ready" and "timeout"
       output.appendLine(`\nSetting up networking (hosts file + SSL certificate)...`);
       const netOk = await this._docker.setupContainerNetworking(name);
       if (!netOk) {
@@ -386,7 +413,7 @@ export class RegistryPanel {
         if (versions.length === 0) {
           // The selected major does not exist in this country. Let the webview
           // know so it can reset the filter dropdown and fall back to the normal
-          // paginated view — which we then send immediately after.
+          // paginated view - which we then send immediately after.
           this._post({ command: "majorNotFound", major });
           await this._loadVersions(type, target);
         } else {
@@ -514,7 +541,7 @@ export class RegistryPanel {
     this._panel.webview.postMessage(msg);
   }
 
-  // ─── HTML (skeleton only — logic is in media/) ───────────────
+  // ─── HTML (skeleton only - logic is in media/) ───────────────
 
   private _getHtml(): string {
     const webview = this._panel.webview;

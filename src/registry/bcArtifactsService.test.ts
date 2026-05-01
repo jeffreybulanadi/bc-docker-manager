@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Unit tests for BcArtifactsService.
  *
  * The global `fetch` is replaced with a jest.fn() so no real HTTP calls are made.
@@ -19,7 +19,7 @@ function rawEntry(version: string, creationTime = "2024-01-01T00:00:00Z") {
 
 /** Create a service instance with fetch mocked. */
 function makeService(fetchImpl: jest.Mock) {
-  // The module declares `fetch` as a global — assign it to globalThis for the test
+  // The module declares `fetch` as a global - assign it to globalThis for the test
   (globalThis as unknown as Record<string, unknown>)["fetch"] = fetchImpl;
   return new BcArtifactsService();
 }
@@ -44,7 +44,7 @@ function mockFetchError(status = 404, statusText = "Not Found"): jest.Mock {
 
 // ─── _parseVersions (tested indirectly via getVersions) ─────────
 
-describe("BcArtifactsService — version parsing and sorting", () => {
+describe("BcArtifactsService - version parsing and sorting", () => {
   it("maps raw CDN entries to BcArtifactVersion objects", async () => {
     const raw = [rawEntry("27.4.45366.46497", "2024-06-01T12:00:00Z")];
     const svc = makeService(mockFetchJson(raw));
@@ -157,7 +157,7 @@ describe("BcArtifactsService.getCountries", () => {
 
 // ─── in-memory caching ───────────────────────────────────────────
 
-describe("BcArtifactsService — in-memory cache", () => {
+describe("BcArtifactsService - in-memory cache", () => {
   it("only calls fetch once for the same type/country on repeated calls", async () => {
     const fetchMock = mockFetchJson([rawEntry("27.0.0.0")]);
     const svc = makeService(fetchMock);
@@ -215,7 +215,7 @@ describe("BcArtifactsService.isReachable", () => {
 
 // ─── disk cache ──────────────────────────────────────────────────
 
-describe("BcArtifactsService — disk cache", () => {
+describe("BcArtifactsService - disk cache", () => {
   let tmpDir: string;
 
   beforeEach(() => {
@@ -249,7 +249,7 @@ describe("BcArtifactsService — disk cache", () => {
     await svc1._flushWrites();
     expect(fetchMock1).toHaveBeenCalledTimes(1);
 
-    // New service instance — fresh memory cache but same disk cache dir
+    // New service instance - fresh memory cache but same disk cache dir
     const fetchMock2 = mockFetchJson(raw);
     const svc2 = makeService(fetchMock2);
     svc2.setStoragePath(tmpDir);
@@ -270,7 +270,7 @@ describe("BcArtifactsService — disk cache", () => {
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
     fs.utimesSync(cacheFile, twoHoursAgo, twoHoursAgo);
 
-    // New service — disk cache expired, must fetch again
+    // New service - disk cache expired, must fetch again
     const fetchMock2 = mockFetchJson(raw);
     const svc2 = makeService(fetchMock2);
     svc2.setStoragePath(tmpDir);
@@ -337,7 +337,7 @@ describe("BcArtifactsService.dispose", () => {
 
 // ─── empty CDN response ──────────────────────────────────────────
 
-describe("BcArtifactsService — empty CDN response", () => {
+describe("BcArtifactsService - empty CDN response", () => {
   it("getVersions returns empty array", async () => {
     const svc = makeService(mockFetchJson([]));
     const versions = await svc.getVersions("sandbox", "us");
@@ -366,29 +366,29 @@ describe("BcArtifactsService — empty CDN response", () => {
 
 // ─── unusual version formats ─────────────────────────────────────
 
-describe("BcArtifactsService — unusual version formats", () => {
-  it("version with 2 parts — major=27, minor=4", async () => {
+describe("BcArtifactsService - unusual version formats", () => {
+  it("version with 2 parts - major=27, minor=4", async () => {
     const svc = makeService(mockFetchJson([rawEntry("27.4")]));
     const versions = await svc.getVersions("sandbox", "us");
     expect(versions[0].major).toBe(27);
     expect(versions[0].minor).toBe(4);
   });
 
-  it("version with 1 part — major=27, minor=0", async () => {
+  it("version with 1 part - major=27, minor=0", async () => {
     const svc = makeService(mockFetchJson([rawEntry("27")]));
     const versions = await svc.getVersions("sandbox", "us");
     expect(versions[0].major).toBe(27);
     expect(versions[0].minor).toBe(0);
   });
 
-  it("version with 5 parts — major=27, minor=4", async () => {
+  it("version with 5 parts - major=27, minor=4", async () => {
     const svc = makeService(mockFetchJson([rawEntry("27.4.1.2.3")]));
     const versions = await svc.getVersions("sandbox", "us");
     expect(versions[0].major).toBe(27);
     expect(versions[0].minor).toBe(4);
   });
 
-  it("empty version string — major=0, minor=0", async () => {
+  it("empty version string - major=0, minor=0", async () => {
     const svc = makeService(mockFetchJson([rawEntry("")]));
     const versions = await svc.getVersions("sandbox", "us");
     expect(versions[0].major).toBe(0);
@@ -398,7 +398,7 @@ describe("BcArtifactsService — unusual version formats", () => {
 
 // ─── setStoragePath failure ──────────────────────────────────────
 
-describe("BcArtifactsService.setStoragePath — failure", () => {
+describe("BcArtifactsService.setStoragePath - failure", () => {
   let tmpDir: string;
 
   beforeEach(() => {
@@ -420,14 +420,14 @@ describe("BcArtifactsService.setStoragePath — failure", () => {
     const versions = await svc.getVersions("sandbox", "us");
     expect(versions).toHaveLength(1);
 
-    // artifact-cache is still a file, not a directory — disk caching was disabled
+    // artifact-cache is still a file, not a directory - disk caching was disabled
     expect(fs.statSync(cacheDir).isDirectory()).toBe(false);
   });
 });
 
 // ─── corrupt disk cache ──────────────────────────────────────────
 
-describe("BcArtifactsService — corrupt disk cache", () => {
+describe("BcArtifactsService - corrupt disk cache", () => {
   let tmpDir: string;
 
   beforeEach(() => {
@@ -455,7 +455,7 @@ describe("BcArtifactsService — corrupt disk cache", () => {
 
 // ─── cache isolation between types ───────────────────────────────
 
-describe("BcArtifactsService — cache isolation between types", () => {
+describe("BcArtifactsService - cache isolation between types", () => {
   it("calls fetch separately for different artifact types", async () => {
     const fetchMock = mockFetchJson([rawEntry("27.0.0.0")]);
     const svc = makeService(fetchMock);
@@ -473,9 +473,9 @@ describe("BcArtifactsService — cache isolation between types", () => {
   });
 });
 
-// ─── getCountries — memory cache hit ─────────────────────────────
+// ─── getCountries - memory cache hit ─────────────────────────────
 
-describe("BcArtifactsService.getCountries — memory cache hit", () => {
+describe("BcArtifactsService.getCountries - memory cache hit", () => {
   it("only calls fetch once for repeated getCountries calls", async () => {
     const fetchMock = mockFetchJson(["us", "de", "w1"]);
     const svc = makeService(fetchMock);
@@ -485,9 +485,9 @@ describe("BcArtifactsService.getCountries — memory cache hit", () => {
   });
 });
 
-// ─── getCountries — disk cache hit ───────────────────────────────
+// ─── getCountries - disk cache hit ───────────────────────────────
 
-describe("BcArtifactsService.getCountries — disk cache hit", () => {
+describe("BcArtifactsService.getCountries - disk cache hit", () => {
   let tmpDir: string;
 
   beforeEach(() => {
@@ -514,9 +514,9 @@ describe("BcArtifactsService.getCountries — disk cache hit", () => {
   });
 });
 
-// ─── getLatestVersions — edge cases ──────────────────────────────
+// ─── getLatestVersions - edge cases ──────────────────────────────
 
-describe("BcArtifactsService.getLatestVersions — edge cases", () => {
+describe("BcArtifactsService.getLatestVersions - edge cases", () => {
   it("limit=0 returns empty versions with correct totalCount", async () => {
     const raw = [rawEntry("27.0.0.0"), rawEntry("26.0.0.0")];
     const svc = makeService(mockFetchJson(raw));
@@ -536,7 +536,7 @@ describe("BcArtifactsService.getLatestVersions — edge cases", () => {
 
 // ─── version sorting stability ───────────────────────────────────
 
-describe("BcArtifactsService — version sorting stability", () => {
+describe("BcArtifactsService - version sorting stability", () => {
   it("sorts versions with same major.minor by patch (newest first)", async () => {
     const raw = [
       rawEntry("27.4.45366.46000"),

@@ -2,7 +2,7 @@
   "name": "bc-docker-manager",
   "displayName": "BC Docker Manager",
   "description": "Manage Business Central Docker containers from VS Code - browse artifacts, create containers, develop AL apps, and configure your environment without BcContainerHelper or Docker Desktop.",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "icon": "resources/icon.png",
   "publisher": "jeffreybulanadi",
   "author": {
@@ -109,6 +109,8 @@
         "bcDockerManager.defaultMemory": {
           "type": "string",
           "default": "8G",
+          "pattern": "^[0-9]+(\\.[0-9]+)?[bBkKmMgG]$",
+          "patternErrorMessage": "Memory must include a unit suffix, e.g. 4G, 8G, 512M.",
           "description": "Default memory limit for new containers (e.g. 4G, 8G, 16G)."
         },
         "bcDockerManager.defaultIsolation": {
@@ -148,6 +150,11 @@
             "onprem"
           ],
           "description": "Default artifact type when browsing."
+        },
+        "bcDockerManager.showReleaseNotesOnUpdate": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the What's New panel automatically when a new version of BC Docker Manager is installed."
         }
       }
     },
@@ -450,6 +457,30 @@
         "title": "Remove All Stopped Containers",
         "icon": "$(trash)",
         "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.setContainerNote",
+        "title": "Set Container Note",
+        "icon": "$(note)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.setContainerTags",
+        "title": "Set Container Tags",
+        "icon": "$(tag)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.clearContainerAnnotations",
+        "title": "Clear Container Note and Tags",
+        "icon": "$(close)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.showReleaseNotes",
+        "title": "What's New",
+        "icon": "$(bookmark)",
+        "category": "BC Docker Manager"
       }
     ],
     "menus": {
@@ -725,6 +756,21 @@
           "command": "bcDockerManager.exportContainer",
           "when": "view == bcDockerManager-containers && (viewItem == stoppedContainer || viewItem == runningContainer)",
           "group": "bcadvanced@1"
+        },
+        {
+          "command": "bcDockerManager.setContainerNote",
+          "when": "view == bcDockerManager-containers && (viewItem == stoppedContainer || viewItem == runningContainer)",
+          "group": "notes@1"
+        },
+        {
+          "command": "bcDockerManager.setContainerTags",
+          "when": "view == bcDockerManager-containers && (viewItem == stoppedContainer || viewItem == runningContainer)",
+          "group": "notes@2"
+        },
+        {
+          "command": "bcDockerManager.clearContainerAnnotations",
+          "when": "view == bcDockerManager-containers && (viewItem == stoppedContainer || viewItem == runningContainer)",
+          "group": "notes@3"
         },
         {
           "command": "bcDockerManager.removeVolume",

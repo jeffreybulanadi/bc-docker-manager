@@ -1,4 +1,4 @@
-import * as vscode from "vscode";
+﻿import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -104,7 +104,7 @@ export class LaunchJsonService {
   static async generate(prefill?: ContainerLaunchInfo): Promise<void> {
     // 1. Container name
     const containerName = prefill?.containerName ?? await vscode.window.showInputBox({
-      title: "Generate AL launch.json — Container Name",
+      title: "Generate AL launch.json - Container Name",
       prompt: "Name of the BC container to connect to",
       placeHolder: "bc25us",
       validateInput: (v) => v?.trim() ? undefined : "Container name is required",
@@ -123,7 +123,7 @@ export class LaunchJsonService {
     let targetFolder: vscode.Uri | undefined;
 
     if (!folders || folders.length === 0) {
-      // No workspace open — offer to pick a folder
+      // No workspace open - offer to pick a folder
       const picked = await vscode.window.showOpenDialog({
         canSelectFolders: true,
         canSelectFiles: false,
@@ -139,7 +139,7 @@ export class LaunchJsonService {
       if (fs.existsSync(appJson)) {
         targetFolder = folders[0].uri;
       } else {
-        // Not an AL project — ask user to pick the right folder
+        // Not an AL project - ask user to pick the right folder
         const choice = await vscode.window.showWarningMessage(
           "The current workspace doesn't appear to be an AL project (no app.json found).",
           "Select AL Project Folder",
@@ -219,11 +219,11 @@ export class LaunchJsonService {
           launch.configurations = [];
         }
       } catch {
-        // Corrupt file — back it up and start fresh
+        // Corrupt file - back it up and start fresh
         const backup = launchPath + `.backup-${Date.now()}`;
         fs.copyFileSync(launchPath, backup);
         vscode.window.showWarningMessage(
-          `Existing launch.json could not be parsed — backed up to ${path.basename(backup)}.`,
+          `Existing launch.json could not be parsed - backed up to ${path.basename(backup)}.`,
         );
         launch = { version: "0.2.0", configurations: [] };
       }
@@ -245,7 +245,7 @@ export class LaunchJsonService {
   }
 
   /**
-   * Minimal JSONC comment stripper — handles // and /* ... *\/ style
+   * Minimal JSONC comment stripper - handles // and /* ... *\/ style
    * comments outside of strings.
    * Also strips a leading UTF-8 BOM (\uFEFF) if present.
    */
@@ -279,10 +279,10 @@ export class LaunchJsonService {
         result += ch;
         i++;
       } else if (ch === "/" && text[i + 1] === "/") {
-        // Line comment — skip until newline
+        // Line comment - skip until newline
         while (i < text.length && text[i] !== "\n") { i++; }
       } else if (ch === "/" && text[i + 1] === "*") {
-        // Block comment — skip until */
+        // Block comment - skip until */
         i += 2;
         while (i < text.length && !(text[i] === "*" && text[i + 1] === "/")) { i++; }
         i += 2; // skip closing */

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Unit tests for LaunchJsonService.
  *
  * Pure functions (buildConfig, stripJsonComments) and file-system operations
@@ -169,7 +169,7 @@ describe("LaunchJsonService.mergeConfig", () => {
     // Write valid JSON with BOM prepended
     const withBom = "\uFEFF" + JSON.stringify({ version: "0.2.0", configurations: [] });
     fs.writeFileSync(launchPath, withBom, "utf-8");
-    // Should parse cleanly — no backup file should appear
+    // Should parse cleanly - no backup file should appear
     await LaunchJsonService.mergeConfig(launchPath, makeConfig("bc1"));
     const backups = fs.readdirSync(vsDir).filter((f) => f.includes("backup"));
     expect(backups).toHaveLength(0);
@@ -190,9 +190,9 @@ describe("LaunchJsonService.mergeConfig", () => {
   });
 });
 
-// ────────────── stripJsonComments — additional edge cases ────────
+// ────────────── stripJsonComments - additional edge cases ────────
 
-describe("LaunchJsonService.stripJsonComments — additional edge cases", () => {
+describe("LaunchJsonService.stripJsonComments - additional edge cases", () => {
   const strip = LaunchJsonService.stripJsonComments.bind(LaunchJsonService);
 
   it("returns empty string for empty input", () => {
@@ -234,9 +234,9 @@ describe("LaunchJsonService.stripJsonComments — additional edge cases", () => 
   });
 });
 
-// ─────────── mergeConfig — additional edge cases ─────────────────
+// ─────────── mergeConfig - additional edge cases ─────────────────
 
-describe("LaunchJsonService.mergeConfig — additional edge cases", () => {
+describe("LaunchJsonService.mergeConfig - additional edge cases", () => {
   let tmpDir: string;
   let launchPath: string;
 
@@ -309,9 +309,9 @@ describe("LaunchJsonService.mergeConfig — additional edge cases", () => {
   });
 });
 
-// ─────────── buildConfig — tenant field ──────────────────────────
+// ─────────── buildConfig - tenant field ──────────────────────────
 
-describe("LaunchJsonService.buildConfig — tenant field", () => {
+describe("LaunchJsonService.buildConfig - tenant field", () => {
   it("tenant is explicitly undefined when not set", () => {
     const cfg = LaunchJsonService.buildConfig({ containerName: "mybc" });
     expect(cfg).toHaveProperty("name");
@@ -340,9 +340,9 @@ describe("LaunchJsonService.buildConfig — tenant field", () => {
   });
 });
 
-// ──── buildConfig — container names with special characters ──────
+// ──── buildConfig - container names with special characters ──────
 
-describe("LaunchJsonService.buildConfig — container names with special characters", () => {
+describe("LaunchJsonService.buildConfig - container names with special characters", () => {
   it("container name with dots produces correct server URL", () => {
     const cfg = LaunchJsonService.buildConfig({ containerName: "my.bc.server" });
     expect(cfg.server).toBe("https://my.bc.server");

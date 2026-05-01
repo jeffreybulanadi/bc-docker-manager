@@ -1,4 +1,4 @@
-import { exec, spawn } from "child_process";
+﻿import { exec, spawn } from "child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -6,6 +6,15 @@ import * as vscode from "vscode";
 import { SWRCache } from "../services/swrCache";
 
 // ────────────────────────── Interfaces ──────────────────────────
+
+/**
+ * Outcome of waitForContainerReady.
+ * - "ready"     container is healthy and BC is accepting connections
+ * - "exited"    container stopped/died before becoming healthy
+ * - "timeout"   container is still running but did not become healthy within the time limit
+ * - "cancelled" the caller's CancellationToken was triggered
+ */
+export type ContainerReadyResult = "ready" | "exited" | "timeout" | "cancelled";
 
 /** A Docker container as returned by `docker ps -a --format json`. */
 export interface DockerContainer {
@@ -65,7 +74,7 @@ const BC_IMAGE = "mcr.microsoft.com/businesscentral:ltsc2022";
 
 /**
  * Pure Docker CLI wrapper. No PowerShell modules, no external
- * frameworks — just `docker` commands parsed from JSON output.
+ * frameworks - just `docker` commands parsed from JSON output.
  */
 export class DockerService implements vscode.Disposable {
 
@@ -274,7 +283,7 @@ export class DockerService implements vscode.Disposable {
         }
         const pct = total > 0 ? Math.round((done / total) * 100) : 0;
         if (pct !== lastPct) {
-          progress.report({ message: `${pct}% — ${layers.size} layers` });
+          progress.report({ message: `${pct}% - ${layers.size} layers` });
           lastPct = pct;
         }
       };
@@ -508,7 +517,7 @@ export class DockerService implements vscode.Disposable {
     log?.(`Image:    ${image}`);
     log?.(`Artifact: ${opts.artifactUrl}`);
     log?.(`Auth:     ${opts.auth || "UserPassword"}`);
-    log?.(`Memory:   ${opts.memoryLimit || "8G"}`);
+    log?.(`Memory:   ${DockerService.normalizeMemory(opts.memoryLimit || "8G")}`);
     log?.("");
 
     // Pre-pull the image with streaming progress so the user sees
@@ -537,7 +546,7 @@ export class DockerService implements vscode.Disposable {
     });
     terminal.show();
 
-    log?.(`Container started — watching logs for initialization progress...`);
+    log?.(`Container started - watching logs for initialization progress...`);
     log?.(`This takes 5-15 minutes (downloading artifacts, installing SQL, configuring BC).\n`);
 
     return true;
@@ -545,15 +554,19 @@ export class DockerService implements vscode.Disposable {
 
   /**
    * Wait for a container to become healthy by polling `docker inspect`.
-   * Returns true if the container becomes healthy within the timeout.
    *
-   * Also streams log snippets to the output channel so the user can
-   * see what phase the initialisation is in.
+   * Returns a reason string so callers can distinguish between success,
+   * an unexpected container exit, a timeout, and user cancellation.
+   *
+   * - "ready"     - container reported healthy (or log-based ready marker found)
+   * - "exited"    - container stopped/died before becoming healthy; last 50 log
+   *                 lines are written to the output channel automatically
+   * - "timeout"   - container is still running but did not become healthy within
+   *                 timeoutMs; container logs were NOT dumped
+   * - "cancelled" - caller's CancellationToken was triggered
    *
    * @param onPhase  Called on every poll with the current phase label.
-   *                 Use this to drive progress notifications or sidebar updates.
-   * @param token    Cancellation token. When cancelled, the loop exits immediately
-   *                 and returns false. Caller is responsible for cleanup.
+   * @param token    Cancellation token.
    */
   async waitForContainerReady(
     containerName: string,
@@ -562,18 +575,18 @@ export class DockerService implements vscode.Disposable {
     pollMs = 10_000,        // check every 10s
     onPhase?: (phase: string) => void,
     token?: vscode.CancellationToken,
-  ): Promise<boolean> {
+  ): Promise<ContainerReadyResult> {
     const log = (msg: string) => output?.appendLine(msg);
     const start = Date.now();
     let lastLogLine = "";
     let currentPhase = "Initializing...";
 
     while (Date.now() - start < timeoutMs) {
-      if (token?.isCancellationRequested) { return false; }
+      if (token?.isCancellationRequested) { return "cancelled"; }
 
       await new Promise((r) => setTimeout(r, pollMs));
 
-      if (token?.isCancellationRequested) { return false; }
+      if (token?.isCancellationRequested) { return "cancelled"; }
 
       // Check container state + health in one shot
       try {
@@ -585,30 +598,29 @@ export class DockerService implements vscode.Disposable {
         const [state, health] = raw.trim().split("|");
 
         if (health === "healthy") {
-          log?.(`\nDone: Container "${containerName}" is ready.`);
+          log(`\nDone: Container "${containerName}" is ready.`);
           onPhase?.("Ready");
-          return true;
+          return "ready";
         }
 
-        // Container exited before becoming healthy
+        // Container exited before becoming healthy - dump logs so the user knows why
         if (state === "exited" || state === "dead") {
-          log?.(`\nError: Container "${containerName}" ${state} unexpectedly.`);
-          return false;
+          log(`\nContainer "${containerName}" stopped before BC was ready.`);
+          await this.dumpContainerLogs(containerName, output);
+          return "exited";
         }
 
-        // "starting" or "unhealthy" while container is still running = keep waiting
         // "no-healthcheck" = image has no HEALTHCHECK, fall back to log-based detection
         if (health === "no-healthcheck" && state === "running") {
-          // Check if the BC initialization has completed by looking for the ready marker in logs
           try {
             const tailRaw = await this.exec(
               `docker logs --tail 5 ${containerName}`,
               5_000,
             );
             if (tailRaw.includes("Ready for connections!") || tailRaw.includes("Container setup complete")) {
-              log?.(`\nDone: Container "${containerName}" is ready. (detected from logs)`);
+              log(`\nDone: Container "${containerName}" is ready (detected from logs).`);
               onPhase?.("Ready");
-              return true;
+              return "ready";
             }
           } catch { /* ignore */ }
         }
@@ -626,7 +638,7 @@ export class DockerService implements vscode.Disposable {
         if (line && line !== lastLogLine) {
           lastLogLine = line;
           const elapsed = Math.round((Date.now() - start) / 1000);
-          log?.(`[${elapsed}s] ${line}`);
+          log(`[${elapsed}s] ${line}`);
           const detected = DockerService.parseInitPhase(line);
           if (detected) { currentPhase = detected; }
         }
@@ -635,8 +647,36 @@ export class DockerService implements vscode.Disposable {
       onPhase?.(currentPhase);
     }
 
-    log?.(`\nError: Timed out waiting for "${containerName}" to become healthy (${Math.round(timeoutMs / 60_000)} min).`);
-    return false;
+    log(`\nTimed out waiting for "${containerName}" to become healthy (${Math.round(timeoutMs / 60_000)} min).`);
+    log(`The container is still running - BC may still be initializing. Networking setup will be attempted.`);
+    return "timeout";
+  }
+
+  /** Write the last 50 log lines of a container to the output channel. */
+  private async dumpContainerLogs(containerName: string, output?: vscode.OutputChannel): Promise<void> {
+    if (!output) { return; }
+    try {
+      // Merge stderr into stdout so container stderr (most BC log output) is captured.
+      const logs = await this.exec(`docker logs --tail 50 ${containerName} 2>&1`, 10_000);
+      const trimmed = logs.trim();
+      if (trimmed) {
+        output.appendLine(`\n-- Last container logs --`);
+        output.appendLine(trimmed);
+        output.appendLine(`-- End of logs --`);
+      } else {
+        output.appendLine(`\n(No container logs available)`);
+      }
+    } catch { /* best-effort */ }
+  }
+
+  /**
+   * Normalize a memory string to ensure it has a unit suffix.
+   * Docker requires a unit (b/k/m/g). If the user stores "8" instead of "8G"
+   * Docker interprets it as 8 bytes and the container OOMs immediately.
+   */
+  private static normalizeMemory(mem: string): string {
+    const trimmed = mem.trim();
+    return /[bBkKmMgG]$/.test(trimmed) ? trimmed : `${trimmed}G`;
   }
 
   /**
@@ -656,7 +696,7 @@ export class DockerService implements vscode.Disposable {
       "run", "-d",
       "--name", opts.containerName,
       "--hostname", opts.containerName,
-      "--memory", opts.memoryLimit || "8G",
+      "--memory", DockerService.normalizeMemory(opts.memoryLimit || "8G"),
       "--isolation", opts.isolation || "hyperv",
       // Explicit DNS: Hyper-V containers often fail to resolve Azure
       // Front Door CDN hostnames with the inherited host DNS, which
@@ -709,18 +749,37 @@ export class DockerService implements vscode.Disposable {
 
   // ── host networking helpers ───────────────────────────────
 
+  private static readonly IPV4_PATTERN = /^(\d{1,3}\.){3}\d{1,3}$/;
+
   /**
-   * Get the NAT IP address of a container.
-   * With Hyper-V isolation the container gets its own IP on the nat network.
+   * Resolve the IP address of a running container.
+   *
+   * Probes the `nat` network first (Windows containers), then `bridge`
+   * (Linux containers), then falls back to iterating every attached network.
+   * Each candidate is validated against a basic IPv4 pattern so that Docker
+   * daemon warnings or template errors can never propagate as a hostname.
    */
   async getContainerIp(nameOrId: string): Promise<string | undefined> {
+    for (const net of ["nat", "bridge"]) {
+      try {
+        const raw = await this.exec(
+          `docker inspect -f "{{.NetworkSettings.Networks.${net}.IPAddress}}" ${nameOrId}`,
+          10_000,
+        );
+        const ip = raw.trim();
+        if (ip && ip !== "<no value>" && DockerService.IPV4_PATTERN.test(ip)) {
+          return ip;
+        }
+      } catch { /* network absent or container not found - try next */ }
+    }
+
+    // Iterate every attached network and return the first valid IPv4.
     try {
       const raw = await this.exec(
-        `docker inspect -f "{{.NetworkSettings.Networks.nat.IPAddress}}" ${nameOrId}`,
+        `docker inspect -f "{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}" ${nameOrId}`,
         10_000,
       );
-      const ip = raw.trim();
-      return ip && ip !== "<no value>" ? ip : undefined;
+      return raw.trim().split(/\s+/).find(s => DockerService.IPV4_PATTERN.test(s));
     } catch {
       return undefined;
     }
@@ -816,7 +875,7 @@ export class DockerService implements vscode.Disposable {
       return true; // Everything is already set up
     }
 
-    // Something is missing — fix it all in one elevation
+    // Something is missing - fix it all in one elevation
     const what: string[] = [];
     if (!hostsOk) { what.push("hosts file"); }
     if (!certOk) { what.push("SSL certificate"); }
@@ -835,7 +894,7 @@ export class DockerService implements vscode.Disposable {
 
   /**
    * Add / update the container’s hostname in the Windows hosts file.
-   * Requires elevation — runs via `Start-Process -Verb RunAs`.
+   * Requires elevation - runs via `Start-Process -Verb RunAs`.
    * Returns true if the hosts file was updated.
    */
   async updateHostsFile(containerName: string): Promise<boolean> {
@@ -990,7 +1049,7 @@ export class DockerService implements vscode.Disposable {
               resolve(false);
             }
           } catch {
-            // Marker file doesn't exist — UAC was denied or script never ran
+            // Marker file doesn't exist - UAC was denied or script never ran
             vscode.window.showWarningMessage(
               `Networking setup did not complete. Was the UAC prompt accepted?`,
             );

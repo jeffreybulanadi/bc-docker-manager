@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Unit tests for DockerHealthProvider.
  *
  * Covers private helpers (_getFeatureState, _isServiceInstalled,
@@ -311,9 +311,9 @@ describe("DockerHealthProvider.startDockerEngine", () => {
   });
 });
 
-// ─── HealthCheckItem — status icons ──────────────────────────────
+// ─── HealthCheckItem - status icons ──────────────────────────────
 
-describe("HealthCheckItem — status icons", () => {
+describe("HealthCheckItem - status icons", () => {
   const { HealthCheckItem } = require("./dockerHealthProvider");
 
   it("uses pass-filled icon with green color for ok status", () => {
@@ -348,9 +348,9 @@ describe("HealthCheckItem — status icons", () => {
   });
 });
 
-// ─── HealthCheckItem — fixCommand ────────────────────────────────
+// ─── HealthCheckItem - fixCommand ────────────────────────────────
 
-describe("HealthCheckItem — fixCommand", () => {
+describe("HealthCheckItem - fixCommand", () => {
   const { HealthCheckItem } = require("./dockerHealthProvider");
 
   it("sets command when fixCommand is provided", () => {
@@ -370,9 +370,9 @@ describe("HealthCheckItem — fixCommand", () => {
   });
 });
 
-// ─── HealthCheckItem — tooltip ───────────────────────────────────
+// ─── HealthCheckItem - tooltip ───────────────────────────────────
 
-describe("HealthCheckItem — tooltip", () => {
+describe("HealthCheckItem - tooltip", () => {
   const { HealthCheckItem } = require("./dockerHealthProvider");
 
   it("tooltip contains OK for ok status", () => {
@@ -468,9 +468,9 @@ describe("DockerHealthProvider.dispose", () => {
   });
 });
 
-// ─── _checkWindowsFeatures — partial service availability ────────
+// ─── _checkWindowsFeatures - partial service availability ────────
 
-describe("_checkWindowsFeatures — partial service availability", () => {
+describe("_checkWindowsFeatures - partial service availability", () => {
   it("returns error with Containers when vmms exists but vmcompute does not", async () => {
     const provider = createProvider();
     mockExec.mockImplementation(
@@ -494,9 +494,9 @@ describe("_checkWindowsFeatures — partial service availability", () => {
   });
 });
 
-// ─── _checkDockerEngine — version format variations ──────────────
+// ─── _checkDockerEngine - version format variations ──────────────
 
-describe("_checkDockerEngine — version format variations", () => {
+describe("_checkDockerEngine - version format variations", () => {
   it("extracts 27.5.1 from standard version string", async () => {
     const provider = createProvider();
     mockExec.mockImplementation(

@@ -1,4 +1,4 @@
-import * as vscode from "vscode";
+﻿import * as vscode from "vscode";
 import { exec } from "child_process";
 import * as path from "path";
 import * as fs from "fs";
@@ -7,7 +7,7 @@ import * as os from "os";
 // ────────────────────────── Constants ───────────────────────────
 
 /**
- * Docker Engine standalone install paths — no Docker Desktop.
+ * Docker Engine standalone install paths - no Docker Desktop.
  * This is where `InstallOrUpdateDockerEngine.ps1` places the binaries.
  */
 const DOCKER_SEARCH_PATHS = [
@@ -26,7 +26,7 @@ const DOCKER_ENGINE_DOCS_URL =
 /**
  * Docker Engine detection and guided installation.
  *
- * This extension targets Docker Engine (Windows service) only —
+ * This extension targets Docker Engine (Windows service) only -
  * Docker Desktop is NOT needed and would conflict with the
  * standalone engine approach used by BcContainerHelper.
  */
@@ -77,16 +77,16 @@ export class DockerSetup {
 
   /**
    * Show a wizard that guides the user through Docker Engine installation.
-   * Docker Desktop is explicitly unsupported — only the standalone engine.
+   * Docker Desktop is explicitly unsupported - only the standalone engine.
    * Returns true if Docker becomes available, false otherwise.
    */
   static async showSetupWizard(): Promise<boolean> {
-    // Warn if Docker Desktop is present — it conflicts with standalone engine
+    // Warn if Docker Desktop is present - it conflicts with standalone engine
     if (await DockerSetup.isDockerDesktopInstalled()) {
       vscode.window.showWarningMessage(
         "Docker Desktop is installed on this machine. " +
         "BC Docker Manager uses Docker Engine (Windows service) directly. " +
-        "Docker Desktop may conflict — consider uninstalling it.",
+        "Docker Desktop may conflict - consider uninstalling it.",
       );
     }
 
@@ -113,7 +113,7 @@ export class DockerSetup {
       return false;
     }
 
-    // Step 2: Docker not found at all — offer to install Engine
+    // Step 2: Docker not found at all - offer to install Engine
     const action = await vscode.window.showWarningMessage(
       "Docker Engine is required to run Business Central containers.\n\n" +
         "This will install Docker Engine as a Windows service (no Docker Desktop needed).",
@@ -199,7 +199,7 @@ export class DockerSetup {
       return undefined;
     }
 
-    // No Docker at all — run wizard
+    // No Docker at all - run wizard
     const installed = await DockerSetup.showSetupWizard();
     return installed ? "docker" : undefined;
   }
@@ -220,7 +220,7 @@ export class DockerSetup {
    */
   static async installDockerEngine(): Promise<boolean> {
     // Guard: if Docker is already installed and the daemon is responding,
-    // don't silently re-download — ask the user first.
+    // don't silently re-download - ask the user first.
     const alreadyRunning = await DockerSetup.isDaemonRunning();
     if (alreadyRunning) {
       const action = await vscode.window.showInformationMessage(
@@ -229,16 +229,16 @@ export class DockerSetup {
         "Cancel",
       );
       if (action !== "Reinstall / Update") {
-        return true; // Already healthy — treat as success
+        return true; // Already healthy - treat as success
       }
     }
 
-    // Warn about Docker Desktop but DO NOT block — bcnavappcontainer works
+    // Warn about Docker Desktop but DO NOT block - bcnavappcontainer works
     // with Docker Desktop too, so let the user decide.
     if (await DockerSetup.isDockerDesktopInstalled()) {
       const action = await vscode.window.showWarningMessage(
         "Docker Desktop is installed on this machine.\n\n" +
-        "bcnavappcontainer (BcContainerHelper) works with Docker Desktop — " +
+        "bcnavappcontainer (BcContainerHelper) works with Docker Desktop - " +
         "you may not need to install Docker Engine standalone.\n\n" +
         "Install Docker Engine standalone anyway?",
         { modal: true },
@@ -276,7 +276,7 @@ if ($feature.State -ne 'Enabled') {
 Write-Host 'Querying latest Docker Engine version...'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $release = Invoke-RestMethod -UseBasicParsing -Uri 'https://api.github.com/repos/moby/moby/releases/latest'
-# tag_name can be "v27.5.1" or "docker-v29.2.1" — extract the bare version
+# tag_name can be "v27.5.1" or "docker-v29.2.1" - extract the bare version
 $tag = $release.tag_name -replace '^(docker-)?v', ''
 Write-Host "Latest Docker Engine version: $tag"
 

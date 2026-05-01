@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Stale-While-Revalidate (SWR) cache.
  *
  * `get()` returns cached data instantly, then fetches fresh data in the
@@ -6,7 +6,7 @@
  * copy, an optional `onUpdate` callback fires so callers (e.g. tree
  * providers) can refresh.
  *
- * This eliminates UI wait times — users always see *something* while
+ * This eliminates UI wait times - users always see *something* while
  * the real data loads behind the scenes.
  */
 export class SWRCache<T> {
@@ -36,17 +36,17 @@ export class SWRCache<T> {
     const age = entry ? Date.now() - entry.ts : Infinity;
 
     if (entry && age < this.staleTtlMs) {
-      // Fresh — return as-is, no revalidation needed.
+      // Fresh - return as-is, no revalidation needed.
       return entry.value;
     }
 
     if (entry) {
-      // Stale — return immediately, revalidate in background.
+      // Stale - return immediately, revalidate in background.
       this._revalidate(key, fetcher);
       return entry.value;
     }
 
-    // Cold cache — must await the first fetch.
+    // Cold cache - must await the first fetch.
     return this._fetchAndStore(key, fetcher);
   }
 
@@ -74,7 +74,7 @@ export class SWRCache<T> {
       })
       .catch(() => {
         this._inflight.delete(key);
-        // Keep stale data on error — better than nothing.
+        // Keep stale data on error - better than nothing.
         return this._data.get(key)?.value as T;
       });
     this._inflight.set(key, p);

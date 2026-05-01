@@ -1,4 +1,4 @@
-import * as fs from "fs";
+﻿import * as fs from "fs";
 import * as fsp from "fs/promises";
 import * as path from "path";
 
@@ -30,7 +30,7 @@ export type BcArtifactType = "sandbox" | "onprem";
 const CDN_BASE = "https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net";
 const REQUEST_TIMEOUT_MS = 15_000;
 
-/** Disk-cache TTL — 1 hour. */
+/** Disk-cache TTL - 1 hour. */
 const CACHE_TTL_MS = 60 * 60 * 1000;
 
 // Node 18+ / VS Code 1.82+ exposes a global fetch that is
@@ -50,7 +50,7 @@ declare const fetch: (
 
 /**
  * Queries the BC Artifacts CDN JSON indexes to discover available
- * Business Central versions — no Docker or PowerShell required.
+ * Business Central versions - no Docker or PowerShell required.
  *
  * Performance features:
  *  - Uses global `fetch()` which is proxy-aware inside VS Code
@@ -213,7 +213,7 @@ export class BcArtifactsService {
     country: string,
     limit: number,
   ): Promise<{ versions: BcArtifactVersion[]; totalCount: number }> {
-    // Try parsed cache first — just slice the tail
+    // Try parsed cache first - just slice the tail
     const cacheKey = `parsed:${type}/${country}`;
     const cached = this._parsedCache.get(cacheKey);
     if (cached) {
@@ -285,7 +285,7 @@ export class BcArtifactsService {
 
   /**
    * Get all distinct major version numbers for a type + country.
-   * This is cheap — just parses the first segment of each version string.
+   * This is cheap - just parses the first segment of each version string.
    */
   async getMajorVersions(
     type: BcArtifactType,
@@ -348,18 +348,18 @@ export class BcArtifactsService {
     return result;
   }
 
-  /** Quick connectivity test — returns milliseconds or error message. */
+  /** Quick connectivity test - returns milliseconds or error message. */
   async testConnection(): Promise<string> {
     const t0 = Date.now();
     try {
       const body = await this._fetch("/sandbox/indexes/countries.json");
       const ms = Date.now() - t0;
       const countries = JSON.parse(body) as string[];
-      return `OK — ${countries.length} countries in ${ms}ms`;
+      return `OK - ${countries.length} countries in ${ms}ms`;
     } catch (err) {
       const ms = Date.now() - t0;
       const msg = err instanceof Error ? err.message : String(err);
-      return `FAILED after ${ms}ms — ${msg}`;
+      return `FAILED after ${ms}ms - ${msg}`;
     }
   }
 

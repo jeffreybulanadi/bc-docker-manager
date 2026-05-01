@@ -1,4 +1,4 @@
-import { TelemetryReporter } from "@vscode/extension-telemetry";
+﻿import { TelemetryReporter } from "@vscode/extension-telemetry";
 
 /**
  * Lightweight telemetry wrapper for Azure Application Insights.
@@ -24,7 +24,7 @@ export function initTelemetry(): void {
   try {
     reporter = new TelemetryReporter(CONNECTION_STRING);
   } catch {
-    // Silently ignore — telemetry is optional.
+    // Silently ignore - telemetry is optional.
   }
 }
 

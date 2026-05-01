@@ -5,6 +5,7 @@ import {
   BcContainerMeta,
   DockerService,
 } from "../docker/dockerService";
+import { ContainerAnnotation } from "../services/containerAnnotationService";
 
 // ──────────────────────── Container Tree Item ──────────────────
 
@@ -14,7 +15,7 @@ import {
 export class ContainerTreeItem extends vscode.TreeItem {
   public readonly bcMeta: BcContainerMeta;
 
-  constructor(public readonly container: DockerContainer) {
+  constructor(public readonly container: DockerContainer, annotation?: ContainerAnnotation) {
     super(container.names, vscode.TreeItemCollapsibleState.None);
 
     const isRunning = container.state.toLowerCase() === "running";
@@ -38,6 +39,9 @@ export class ContainerTreeItem extends vscode.TreeItem {
       parts.push(this.bcMeta.country.toUpperCase());
     }
     parts.push(container.status);
+    if (annotation?.tags?.length) {
+      parts.push(annotation.tags.map((t) => `#${t}`).join(" "));
+    }
     this.description = parts.join(" | ");
 
     const lines: string[] = [
@@ -65,6 +69,13 @@ export class ContainerTreeItem extends vscode.TreeItem {
       if (this.bcMeta.platform) {
         lines.push(`| Platform | ${this.bcMeta.platform} |`);
       }
+    }
+
+    if (annotation?.note) {
+      lines.push("");
+      lines.push("**Note**");
+      lines.push("");
+      lines.push(annotation.note);
     }
 
     this.tooltip = new vscode.MarkdownString(lines.join("\n"));

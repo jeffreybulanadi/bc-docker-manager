@@ -1,5 +1,5 @@
-/**
- * ExTester runner — downloads VS Code + ChromeDriver, packages the extension,
+﻿/**
+ * ExTester runner - downloads VS Code + ChromeDriver, packages the extension,
  * and runs UI tests with Selenium WebDriver.
  *
  * First run is slow (~2 min for VS Code download + VSIX packaging).

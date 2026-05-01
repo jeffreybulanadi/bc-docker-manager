@@ -22,6 +22,7 @@
 |---|---------|-------------|
 | | [Artifacts Explorer](#bc-artifacts-explorer) | Browse & create containers from the Microsoft CDN |
 | | [Container Management](#container-management) | Full lifecycle: start, stop, restart, remove, export, import |
+| | [Container Annotations](#container-annotations) | Attach tags and notes to containers |
 | | [Environment Setup](#environment-setup) | One-click wizard for Hyper-V, Windows Containers & Docker Engine |
 | | [AL Development](#al-development) | Generate launch.json, compile apps, publish to containers |
 | | [Networking & SSL](#networking--ssl) | Auto-configure hosts file and install self-signed certificates |
@@ -103,6 +104,40 @@ Right-click any container for the full action menu:
      Container actions, Connection, BC Operations, BC Data, BC Pro Features, Advanced.
      Save as: screenshots/container-context-menu.png -->
 ![Container Context Menu](screenshots/container-context-menu.png)
+
+---
+
+## Container Annotations
+
+Keep track of what each container is for by attaching tags and notes directly in the sidebar. No extra files or scripts needed - annotations are stored in VS Code global state and survive container restarts and recreations.
+
+Tags and notes can be set together. Both appear in the sidebar immediately after saving.
+
+![Container with tags and note set](screenshots/tags/set-notes-and-tags-menu.jpg)
+
+| Command | What it does |
+|---------|-------------|
+| **Set Container Tags** | Attach comma-separated tags to a container |
+| **Set Container Note** | Attach a free-text note to a container |
+| **Clear Container Note and Tags** | Remove all annotations from a container |
+
+### Tags
+
+Right-click any container and choose **Set Container Tags** to attach comma-separated labels.
+
+![Set Container Tags menu](screenshots/tags/set-tags.jpg)
+
+Tags appear inline in the container list as `#tag1 #tag2` so you can identify containers at a glance.
+
+![Tags shown in container list](screenshots/tags/tags-and-notes-set.jpg)
+
+### Notes
+
+Right-click any container and choose **Set Container Note** to attach a free-text note (e.g. "Client demo - do not remove" or "Restore from backup 2026-04-30").
+
+![Set Container Note menu](screenshots/tags/set-notes.jpg)
+
+The note is shown at the bottom of the container tooltip when you hover over the container.
 
 ---
 
@@ -383,6 +418,20 @@ All commands are available from the Command Palette (`Ctrl+Shift+P`) under the *
 | Edit Container Profile | Update an existing saved profile |
 | Delete Container Profile | Remove a saved profile |
 
+### Container Annotations
+
+| Command | Description |
+|---------|-------------|
+| Set Container Tags | Attach comma-separated tags to a container |
+| Set Container Note | Attach a free-text note to a container |
+| Clear Container Note and Tags | Remove all annotations from a container |
+
+### General
+
+| Command | Description |
+|---------|-------------|
+| What's New | Open the release notes panel for the current version |
+
 ### Volumes
 
 | Command | Description |
@@ -414,6 +463,7 @@ Configure defaults under **Settings > Extensions > BC Docker Manager**:
 | `bcDockerManager.defaultCountry` | `us` | Default country for artifact browsing (e.g. `us`, `w1`, `de`, `fr`) |
 | `bcDockerManager.defaultDns` | `8.8.8.8` | DNS server for containers |
 | `bcDockerManager.defaultArtifactType` | `sandbox` | Default artifact tab: `sandbox` or `onprem` |
+| `bcDockerManager.showReleaseNotesOnUpdate` | `true` | Show the What's New panel automatically when a new version is installed |
 
 ---
 
