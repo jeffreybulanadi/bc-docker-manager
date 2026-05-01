@@ -1,4 +1,4 @@
-/**
+﻿/**
  * UI tests for BC Docker Manager using vscode-extension-tester.
  *
  * These tests use Selenium WebDriver to interact with the actual VS Code UI:
@@ -23,7 +23,7 @@ import {
 } from "vscode-extension-tester";
 import { expect } from "chai";
 
-describe("BC Docker Manager — UI Tests", function () {
+describe("BC Docker Manager - UI Tests", function () {
   this.timeout(60_000);
 
   let sideBar: SideBarView;
@@ -133,7 +133,7 @@ describe("BC Docker Manager — UI Tests", function () {
             attempt < 2 &&
             err.name === "StaleElementReferenceError"
           ) {
-            // Health checks refreshed the DOM — retry
+            // Health checks refreshed the DOM - retry
             continue;
           }
           throw err;

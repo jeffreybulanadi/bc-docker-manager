@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Unit tests for BcContainerService.
  *
  * Tests focus on:
@@ -260,7 +260,7 @@ describe("writeFileToContainer", () => {
     const proc = fakeSpawnOk();
     await (svc as any).writeFileToContainer("mybc", "C:\\host\\f.txt", "C:\\run\\f.txt");
     // Decode all base64 lines (each chunk is a multiple of 3 raw bytes so
-    // only the final chunk carries '=' padding — safe to concatenate).
+    // only the final chunk carries '=' padding - safe to concatenate).
     const allLines: string = proc.stdin.write.mock.calls
       .map((c: any[]) => (c[0] as string).replace(/\n$/, ""))
       .join("");
@@ -313,8 +313,8 @@ describe("readFileFromContainer", () => {
   });
 
   it("streams large files without loading all into memory", async () => {
-    const chunk1 = Buffer.alloc(49_152, 0x01); // 48 KB — no padding
-    const chunk2 = Buffer.alloc(100, 0x02);    // leftover — padded
+    const chunk1 = Buffer.alloc(49_152, 0x01); // 48 KB - no padding
+    const chunk2 = Buffer.alloc(100, 0x02);    // leftover - padded
     const b64 = Buffer.concat([chunk1, chunk2]).toString("base64");
     const ws = makeWriteStream();
     mockFs.createWriteStream.mockReturnValueOnce(ws as any);
@@ -357,7 +357,7 @@ describe("getContainerInfo", () => {
     await (svc as any).getContainerInfo("mybc");
     const result = await (svc as any).getContainerInfo("mybc");
     expect(result).toEqual({ serverInstance: "NAV", dbName: "MyDB" });
-    // exec should only be called once — second call uses cache
+    // exec should only be called once - second call uses cache
     expect(mockExec).toHaveBeenCalledTimes(1);
   });
 

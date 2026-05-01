@@ -1,4 +1,4 @@
-import * as vscode from "vscode";
+﻿import * as vscode from "vscode";
 import { exec } from "child_process";
 
 // ────────────────────────── Types ───────────────────────────────
@@ -56,10 +56,10 @@ export class HealthCheckItem extends vscode.TreeItem {
 
     const lines: string[] = [];
     switch (check.status) {
-      case "ok":    lines.push(`$(pass-filled) **${check.label}** — OK`); break;
-      case "warn":  lines.push(`$(warning) **${check.label}** — Warning`); break;
-      case "error": lines.push(`$(error) **${check.label}** — Not Available`); break;
-      default:      lines.push(`$(sync~spin) **${check.label}** — Checking…`);
+      case "ok":    lines.push(`$(pass-filled) **${check.label}** - OK`); break;
+      case "warn":  lines.push(`$(warning) **${check.label}** - Warning`); break;
+      case "error": lines.push(`$(error) **${check.label}** - Not Available`); break;
+      default:      lines.push(`$(sync~spin) **${check.label}** - Checking…`);
     }
     lines.push("", check.detail);
     if (check.fixCommand) {
@@ -72,11 +72,11 @@ export class HealthCheckItem extends vscode.TreeItem {
 // ────────────────────────── Provider ───────────────────────────
 
 /**
- * Tree data provider — simplified environment readiness.
+ * Tree data provider - simplified environment readiness.
  *
  * Shows exactly two items:
- *  1. **Windows Features** — Hyper-V + Containers (both required, enabled together)
- *  2. **Docker Engine**    — CLI installed and daemon running
+ *  1. **Windows Features** - Hyper-V + Containers (both required, enabled together)
+ *  2. **Docker Engine**    - CLI installed and daemon running
  *
  * Auto-refreshes every 15 seconds.
  */
@@ -179,7 +179,7 @@ export class DockerHealthProvider
 
   /**
    * Combined Hyper-V + Windows Containers check.
-   * Both are Windows Optional Features — they're enabled together
+   * Both are Windows Optional Features - they're enabled together
    * and both require a reboot, so we treat them as one step.
    */
   private async _checkWindowsFeatures(): Promise<HealthCheck> {
@@ -246,7 +246,7 @@ export class DockerHealthProvider
           id: "features",
           label: "Step 1 · Windows Features",
           status: "warn",
-          detail: "Could not verify — run as admin to check",
+          detail: "Could not verify - run as admin to check",
           fixCommand: "bcDockerManager.enableWindowsFeatures",
         };
       }
@@ -273,7 +273,7 @@ export class DockerHealthProvider
       };
     }
 
-    // Docker CLI exists — check if daemon is running
+    // Docker CLI exists - check if daemon is running
     try {
       await this._exec("docker info", 10_000);
       return {

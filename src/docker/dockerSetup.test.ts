@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Unit tests for DockerSetup.
  *
  * Tests focus on the static detection helpers:
@@ -152,9 +152,9 @@ describe("DockerSetup.installDockerEngine", () => {
   });
 });
 
-// ─── isDaemonRunning — default path ─────────────────────────────
+// ─── isDaemonRunning - default path ─────────────────────────────
 
-describe("isDaemonRunning — default path", () => {
+describe("isDaemonRunning - default path", () => {
   it('uses "docker" (default) when no path provided', async () => {
     mockExec.mockImplementation((cmd: string, opts: unknown, cb: Function) => {
       cb(null, "", "");
@@ -168,9 +168,9 @@ describe("isDaemonRunning — default path", () => {
   });
 });
 
-// ─── installDockerEngine — reinstall flow ───────────────────────
+// ─── installDockerEngine - reinstall flow ───────────────────────
 
-describe("installDockerEngine — reinstall flow", () => {
+describe("installDockerEngine - reinstall flow", () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const vscode = require("vscode");
 
@@ -196,9 +196,9 @@ describe("installDockerEngine — reinstall flow", () => {
   }, 15_000);
 });
 
-// ─── installDockerEngine — Docker Desktop present, Install Anyway ─
+// ─── installDockerEngine - Docker Desktop present, Install Anyway ─
 
-describe("installDockerEngine — Docker Desktop present, Install Anyway", () => {
+describe("installDockerEngine - Docker Desktop present, Install Anyway", () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const vscode = require("vscode");
 
@@ -215,10 +215,10 @@ describe("installDockerEngine — Docker Desktop present, Install Anyway", () =>
       if (cmd.includes("info")) {
         infoCallCount++;
         if (infoCallCount === 1) {
-          // isDaemonRunning — first check: daemon NOT running
+          // isDaemonRunning - first check: daemon NOT running
           cb(new Error("not running"), "", "");
         } else {
-          // isDaemonRunning — after install: daemon running
+          // isDaemonRunning - after install: daemon running
           cb(null, "", "");
         }
       } else {
@@ -239,9 +239,9 @@ describe("installDockerEngine — Docker Desktop present, Install Anyway", () =>
   }, 15_000);
 });
 
-// ─── installDockerEngine — Docker Desktop present, user cancels ──
+// ─── installDockerEngine - Docker Desktop present, user cancels ──
 
-describe("installDockerEngine — Docker Desktop present, user cancels", () => {
+describe("installDockerEngine - Docker Desktop present, user cancels", () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const vscode = require("vscode");
 

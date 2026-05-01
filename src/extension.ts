@@ -1,4 +1,4 @@
-import * as vscode from "vscode";
+﻿import * as vscode from "vscode";
 import { exec } from "child_process";
 import { DockerService } from "./docker/dockerService";
 import { DockerSetup } from "./docker/dockerSetup";
@@ -138,7 +138,7 @@ export async function activate(
       const checks = healthProvider.checks;
       const failing = checks.filter((c) => c.status !== "ok");
       if (failing.length === 0) {
-        vscode.window.showInformationMessage("Environment is ready — you're all set!");
+        vscode.window.showInformationMessage("Environment is ready - you're all set!");
         return;
       }
 
@@ -336,7 +336,7 @@ export async function activate(
           await new Promise((r) => setTimeout(r, 2000));
         }
 
-        // Everything is configured — open the web client
+        // Everything is configured - open the web client
         vscode.env.openExternal(vscode.Uri.parse(`https://${name}/BC/`));
       },
     )

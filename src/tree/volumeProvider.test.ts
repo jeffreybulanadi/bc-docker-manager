@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Unit tests for VolumeProvider.
  */
 
@@ -138,9 +138,9 @@ describe("VolumeProvider.refresh", () => {
   });
 });
 
-// ─── getChildren — multiple volumes ──────────────────────────────
+// ─── getChildren - multiple volumes ──────────────────────────────
 
-describe("VolumeProvider.getChildren — multiple volumes", () => {
+describe("VolumeProvider.getChildren - multiple volumes", () => {
   const volumes: DockerVolume[] = [
     { name: "vol-alpha", driver: "local", mountpoint: "/mnt/alpha" },
     { name: "vol-beta", driver: "overlay2", mountpoint: "/mnt/beta" },

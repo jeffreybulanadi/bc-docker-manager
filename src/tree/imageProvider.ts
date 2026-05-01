@@ -1,4 +1,4 @@
-import * as vscode from "vscode";
+﻿import * as vscode from "vscode";
 import { DockerService } from "../docker/dockerService";
 import { ImageTreeItem } from "./models";
 
@@ -31,7 +31,7 @@ export class ImageProvider
 
       return images.map((img) => new ImageTreeItem(img));
     } catch {
-      // Docker not available — return empty list silently.
+      // Docker not available - return empty list silently.
       return [];
     }
   }

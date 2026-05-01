@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Unit tests for DockerService.
  *
  * Tests focus on:
@@ -96,7 +96,7 @@ describe("DockerService.looksLikeBcImage", () => {
   });
 
   it("does NOT match 'bc' inside a longer word", () => {
-    // 'backup-tool' should not match — 'bc' is not a delimited segment
+    // 'backup-tool' should not match - 'bc' is not a delimited segment
     // Note: "backup" contains 'bac' not 'bc', but "object" contains 'bc' as a subsequence not segment
     expect(fn("objectstorage:latest")).toBe(false);
   });
@@ -402,7 +402,7 @@ describe("DockerService.buildHostsScript", () => {
     // The dollar-sign anchor ($) at line end is part of the regex pattern,
     // but special chars in the name like '.' and '+' should not appear raw
     // in the -notmatch pattern. The current implementation uses the name
-    // directly — this test documents that behaviour.
+    // directly - this test documents that behaviour.
     expect(script).toContain("my.bc+test");
   });
 
@@ -697,7 +697,7 @@ describe("DockerService.parseImageLines (missing fields)", () => {
 describe("DockerService.enrichWithLabels (additional cases)", () => {
   afterEach(() => jest.restoreAllMocks());
 
-  it("inspect returns entry with missing Config key — labels stay empty", async () => {
+  it("inspect returns entry with missing Config key - labels stay empty", async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const svc = new DockerService() as any;
     const containers = [
@@ -711,7 +711,7 @@ describe("DockerService.enrichWithLabels (additional cases)", () => {
     expect(containers[0].labels).toEqual({});
   });
 
-  it("inspect returns malformed JSON string — labels stay empty", async () => {
+  it("inspect returns malformed JSON string - labels stay empty", async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const svc = new DockerService() as any;
     const containers = [

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Unit tests for ContainerTreeItem and ImageTreeItem.
  */
 
@@ -123,9 +123,9 @@ describe("ImageTreeItem", () => {
   });
 });
 
-// ─── ContainerTreeItem — partial BC labels ────────────────────────
+// ─── ContainerTreeItem - partial BC labels ────────────────────────
 
-describe("ContainerTreeItem — partial BC labels", () => {
+describe("ContainerTreeItem - partial BC labels", () => {
   it("container with nav but no country includes version without country", () => {
     const item = new ContainerTreeItem(
       makeContainer({ labels: { nav: "25.0.12345.0" } })
@@ -168,9 +168,9 @@ describe("ContainerTreeItem — partial BC labels", () => {
   });
 });
 
-// ─── ContainerTreeItem — tooltip without BC labels ────────────────
+// ─── ContainerTreeItem - tooltip without BC labels ────────────────
 
-describe("ContainerTreeItem — tooltip without BC labels", () => {
+describe("ContainerTreeItem - tooltip without BC labels", () => {
   it("container with empty labels omits Business Central section", () => {
     const item = new ContainerTreeItem(makeContainer({ labels: {} }));
     const md = (item.tooltip as vscode.MarkdownString).value;
@@ -190,9 +190,9 @@ describe("ContainerTreeItem — tooltip without BC labels", () => {
   });
 });
 
-// ─── ContainerTreeItem — state variations ─────────────────────────
+// ─── ContainerTreeItem - state variations ─────────────────────────
 
-describe("ContainerTreeItem — state variations", () => {
+describe("ContainerTreeItem - state variations", () => {
   it("state 'created' is stoppedContainer context", () => {
     const item = new ContainerTreeItem(
       makeContainer({ state: "created", status: "Created" })
@@ -218,9 +218,9 @@ describe("ContainerTreeItem — state variations", () => {
   });
 });
 
-// ─── ImageTreeItem — additional checks ────────────────────────────
+// ─── ImageTreeItem - additional checks ────────────────────────────
 
-describe("ImageTreeItem — additional checks", () => {
+describe("ImageTreeItem - additional checks", () => {
   it("contextValue is always 'image'", () => {
     const item = new ImageTreeItem(makeImage());
 
@@ -264,9 +264,9 @@ describe("ImageTreeItem — additional checks", () => {
   });
 });
 
-// ─── ContainerTreeItem — empty/missing ports ──────────────────────
+// ─── ContainerTreeItem - empty/missing ports ──────────────────────
 
-describe("ContainerTreeItem — empty/missing ports", () => {
+describe("ContainerTreeItem - empty/missing ports", () => {
   it("container with empty ports shows 'none' in tooltip", () => {
     const item = new ContainerTreeItem(makeContainer({ ports: "" }));
     const md = (item.tooltip as vscode.MarkdownString).value;
@@ -284,9 +284,9 @@ describe("ContainerTreeItem — empty/missing ports", () => {
   });
 });
 
-// ─── ContainerTreeItem — annotations ─────────────────────────────
+// ─── ContainerTreeItem - annotations ─────────────────────────────
 
-describe("ContainerTreeItem — annotations", () => {
+describe("ContainerTreeItem - annotations", () => {
   it("tags appear in description when annotation has tags", () => {
     const item = new ContainerTreeItem(makeContainer(), { tags: ["client1", "sandbox"] });
 

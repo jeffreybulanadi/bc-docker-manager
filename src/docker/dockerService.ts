@@ -1,4 +1,4 @@
-import { exec, spawn } from "child_process";
+﻿import { exec, spawn } from "child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -65,7 +65,7 @@ const BC_IMAGE = "mcr.microsoft.com/businesscentral:ltsc2022";
 
 /**
  * Pure Docker CLI wrapper. No PowerShell modules, no external
- * frameworks — just `docker` commands parsed from JSON output.
+ * frameworks - just `docker` commands parsed from JSON output.
  */
 export class DockerService implements vscode.Disposable {
 
@@ -274,7 +274,7 @@ export class DockerService implements vscode.Disposable {
         }
         const pct = total > 0 ? Math.round((done / total) * 100) : 0;
         if (pct !== lastPct) {
-          progress.report({ message: `${pct}% — ${layers.size} layers` });
+          progress.report({ message: `${pct}% - ${layers.size} layers` });
           lastPct = pct;
         }
       };
@@ -537,7 +537,7 @@ export class DockerService implements vscode.Disposable {
     });
     terminal.show();
 
-    log?.(`Container started — watching logs for initialization progress...`);
+    log?.(`Container started - watching logs for initialization progress...`);
     log?.(`This takes 5-15 minutes (downloading artifacts, installing SQL, configuring BC).\n`);
 
     return true;
@@ -730,7 +730,7 @@ export class DockerService implements vscode.Disposable {
         if (ip && ip !== "<no value>" && DockerService.IPV4_PATTERN.test(ip)) {
           return ip;
         }
-      } catch { /* network absent or container not found — try next */ }
+      } catch { /* network absent or container not found - try next */ }
     }
 
     // Iterate every attached network and return the first valid IPv4.
@@ -835,7 +835,7 @@ export class DockerService implements vscode.Disposable {
       return true; // Everything is already set up
     }
 
-    // Something is missing — fix it all in one elevation
+    // Something is missing - fix it all in one elevation
     const what: string[] = [];
     if (!hostsOk) { what.push("hosts file"); }
     if (!certOk) { what.push("SSL certificate"); }
@@ -854,7 +854,7 @@ export class DockerService implements vscode.Disposable {
 
   /**
    * Add / update the container’s hostname in the Windows hosts file.
-   * Requires elevation — runs via `Start-Process -Verb RunAs`.
+   * Requires elevation - runs via `Start-Process -Verb RunAs`.
    * Returns true if the hosts file was updated.
    */
   async updateHostsFile(containerName: string): Promise<boolean> {
@@ -1009,7 +1009,7 @@ export class DockerService implements vscode.Disposable {
               resolve(false);
             }
           } catch {
-            // Marker file doesn't exist — UAC was denied or script never ran
+            // Marker file doesn't exist - UAC was denied or script never ran
             vscode.window.showWarningMessage(
               `Networking setup did not complete. Was the UAC prompt accepted?`,
             );

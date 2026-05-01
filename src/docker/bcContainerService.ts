@@ -1,4 +1,4 @@
-import { exec, spawn } from "child_process";
+﻿import { exec, spawn } from "child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -66,7 +66,7 @@ export class BcContainerService {
 
     const lines = clean.split(/\r?\n/);
     // PowerShell puts the actual error value on lines like "     | Your message."
-    // Lines with only tildes ("     |     ~~~~~") are underlines — skip them.
+    // Lines with only tildes ("     |     ~~~~~") are underlines - skip them.
     const valueLine = lines.find(l => /^\s*\|\s+[^~\s]/.test(l));
     if (valueLine) {
       const msg = valueLine.replace(/^\s*\|\s+/, "").trim();
@@ -419,12 +419,12 @@ export class BcContainerService {
                   120_000,
                 );
               } catch {
-                // App may already be the latest — that's fine
+                // App may already be the latest - that's fine
               }
             }
           }
         } catch {
-          // Could not parse app info — publish succeeded, user can sync manually
+          // Could not parse app info - publish succeeded, user can sync manually
         }
 
         // Step 6: Cleanup
@@ -495,14 +495,14 @@ export class BcContainerService {
 
   async addUser(containerName: string): Promise<void> {
     const username = await vscode.window.showInputBox({
-      title: "Add BC User — Username",
+      title: "Add BC User - Username",
       prompt: "Enter the username for the new BC user",
       placeHolder: "testuser",
     });
     if (!username) { return; }
 
     const password = await vscode.window.showInputBox({
-      title: "Add BC User — Password",
+      title: "Add BC User - Password",
       prompt: "Enter the password",
       password: true,
     });
@@ -563,7 +563,7 @@ export class BcContainerService {
               ].join(" "),
             );
           } catch {
-            // User may already exist — continue
+            // User may already exist - continue
           }
         }
         vscode.window.showInformationMessage(
@@ -763,7 +763,7 @@ export class BcContainerService {
               120_000,
             );
           } catch {
-            // Some apps may have dependency issues — continue
+            // Some apps may have dependency issues - continue
           }
         }
 
@@ -787,7 +787,7 @@ export class BcContainerService {
   async showContainerStats(containerName: string): Promise<void> {
     const output = vscode.window.createOutputChannel(`Stats: ${containerName}`);
     output.show();
-    output.appendLine(`Resource monitor for "${containerName}" — refreshing every 5s…`);
+    output.appendLine(`Resource monitor for "${containerName}" - refreshing every 5s…`);
     output.appendLine("─".repeat(80));
 
     const refresh = async () => {
@@ -810,7 +810,7 @@ export class BcContainerService {
     // Initial refresh
     await refresh();
 
-    // Set up polling — runs until output channel is disposed
+    // Set up polling - runs until output channel is disposed
     const interval = setInterval(refresh, 5000);
     const origDispose = output.dispose.bind(output);
     output.dispose = () => {
@@ -850,7 +850,7 @@ export class BcContainerService {
     }));
 
     const selected = await vscode.window.showQuickPick(items, {
-      title: `NST Settings — ${containerName}`,
+      title: `NST Settings - ${containerName}`,
       placeHolder: "Select a setting to edit",
       matchOnDescription: true,
     });
@@ -915,7 +915,7 @@ export class BcContainerService {
           ].join(" "),
           60_000,
         );
-        output.appendLine(`Event Log — ${containerName} (last ${count} BC/SQL entries)`);
+        output.appendLine(`Event Log - ${containerName} (last ${count} BC/SQL entries)`);
         output.appendLine("═".repeat(120));
         output.appendLine(raw || "No matching event log entries found.");
       },
@@ -1359,12 +1359,12 @@ export class BcContainerService {
     }
   }
 
-  /** Shorthand — get just the server instance name. */
+  /** Shorthand - get just the server instance name. */
   private async getServerInstance(containerName: string): Promise<string> {
     return (await this.getContainerInfo(containerName)).serverInstance;
   }
 
-  /** Shorthand — get just the database name. */
+  /** Shorthand - get just the database name. */
   private async getDatabaseName(
     containerName: string,
     _serverInstance?: string,

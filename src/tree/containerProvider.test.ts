@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Unit tests for ContainerProvider.
  */
 
@@ -137,9 +137,9 @@ describe("ContainerProvider.refresh", () => {
   });
 });
 
-// ─── toggleBcFilter — shows information message ─────────────────
+// ─── toggleBcFilter - shows information message ─────────────────
 
-describe("ContainerProvider.toggleBcFilter — shows information message", () => {
+describe("ContainerProvider.toggleBcFilter - shows information message", () => {
   const vscode = require("vscode");
 
   it("shows message containing OFF when filter is turned off", () => {
@@ -180,9 +180,9 @@ describe("ContainerProvider.getTreeItem", () => {
   });
 });
 
-// ─── getChildren — multiple containers ───────────────────────────
+// ─── getChildren - multiple containers ───────────────────────────
 
-describe("ContainerProvider.getChildren — multiple containers", () => {
+describe("ContainerProvider.getChildren - multiple containers", () => {
   it("returns 3 ContainerTreeItem instances for 3 containers", async () => {
     const containers: DockerContainer[] = [
       { ...sampleContainer, id: "c1", names: "/container1" },
@@ -203,9 +203,9 @@ describe("ContainerProvider.getChildren — multiple containers", () => {
   });
 });
 
-// ─── getChildren — mixed states ──────────────────────────────────
+// ─── getChildren - mixed states ──────────────────────────────────
 
-describe("ContainerProvider.getChildren — mixed states", () => {
+describe("ContainerProvider.getChildren - mixed states", () => {
   it("assigns correct contextValue for running and stopped containers", async () => {
     const runningContainer: DockerContainer = {
       ...sampleContainer,

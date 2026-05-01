@@ -1,4 +1,4 @@
-import * as vscode from "vscode";
+﻿import * as vscode from "vscode";
 import {
   BcArtifactsService,
   BcArtifactType,
@@ -59,7 +59,7 @@ export class RegistryPanel {
 
     this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
 
-    // Set HTML — external JS sends "ready" once loaded
+    // Set HTML - external JS sends "ready" once loaded
     this._panel.webview.html = this._getHtml();
 
     // Failsafe: if "ready" never arrives, init after 2 s
@@ -167,12 +167,12 @@ export class RegistryPanel {
     const defaultName = `bc${version.split(".")[0]}${country}`;
     const name = await vscode.window.showInputBox({
       title: "Create BC Container (1/3): Name",
-      prompt: "Container name (lowercase letters, numbers, dash or dot — BC uses this as the hostname)",
+      prompt: "Container name (lowercase letters, numbers, dash or dot - BC uses this as the hostname)",
       value: defaultName,
       validateInput: (v) => {
         if (!v) { return "Name is required"; }
         if (/[A-Z]/.test(v)) {
-          return "Container name must be lowercase. BC uses the name as a hostname — uppercase letters are not valid.";
+          return "Container name must be lowercase. BC uses the name as a hostname - uppercase letters are not valid.";
         }
         if (!/^[a-z0-9][a-z0-9_.-]*$/.test(v)) {
           return "Invalid container name. Use lowercase letters, numbers, dash, or dot.";
@@ -395,7 +395,7 @@ export class RegistryPanel {
         if (versions.length === 0) {
           // The selected major does not exist in this country. Let the webview
           // know so it can reset the filter dropdown and fall back to the normal
-          // paginated view — which we then send immediately after.
+          // paginated view - which we then send immediately after.
           this._post({ command: "majorNotFound", major });
           await this._loadVersions(type, target);
         } else {
@@ -523,7 +523,7 @@ export class RegistryPanel {
     this._panel.webview.postMessage(msg);
   }
 
-  // ─── HTML (skeleton only — logic is in media/) ───────────────
+  // ─── HTML (skeleton only - logic is in media/) ───────────────
 
   private _getHtml(): string {
     const webview = this._panel.webview;
