@@ -55,6 +55,44 @@ beforeEach(() => {
   svc = new BcContainerService(docker);
 });
 
+// ─── cleanPsError (private static, accessed via any) ─────────────
+
+describe("cleanPsError", () => {
+  const clean = (raw: string) => (BcContainerService as any).cleanPsError(raw);
+
+  it("returns empty string for empty input", () => {
+    expect(clean("")).toBe("");
+  });
+
+  it("strips ANSI escape sequences", () => {
+    expect(clean("\x1b[31;1mSome error\x1b[0m")).toBe("Some error");
+  });
+
+  it("extracts the value line from a structured PowerShell error", () => {
+    const raw = [
+      "\x1b[31;1mImport-NAVServerLicense : \x1b[0m",
+      "Line |",
+      "  15 |     $output = Import-NAVServerLicense @cmdletArgs;",
+      "     |               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+      "     | Your program license has expired.",
+    ].join("\n");
+    expect(clean(raw)).toBe("Import-NAVServerLicense: Your program license has expired.");
+  });
+
+  it("skips underline-only lines when extracting value", () => {
+    const raw = "Set-NAVServerInstance : \n     |     ~~~~~~~~~~~\n     | Service not found.";
+    expect(clean(raw)).toBe("Set-NAVServerInstance: Service not found.");
+  });
+
+  it("falls back to first non-empty line when no PS structure found", () => {
+    expect(clean("container not found\nmore details")).toBe("container not found");
+  });
+
+  it("handles plain stderr with no ANSI and no PS structure", () => {
+    expect(clean("permission denied")).toBe("permission denied");
+  });
+});
+
 // ─── exec (private, accessed via `any`) ──────────────────────────
 
 describe("exec", () => {
@@ -79,9 +117,14 @@ describe("exec", () => {
     );
   });
 
-  it("rejects with stderr message on error", async () => {
+  it("rejects with cleaned stderr message on error", async () => {
     fakeExecFail("permission denied");
     await expect((svc as any).exec("bad-cmd")).rejects.toThrow("permission denied");
+  });
+
+  it("strips ANSI codes from stderr when rejecting", async () => {
+    fakeExecFail("\x1b[31;1mContainer not found\x1b[0m");
+    await expect((svc as any).exec("bad-cmd")).rejects.toThrow("Container not found");
   });
 
   it("rejects with err.message when stderr is empty", async () => {

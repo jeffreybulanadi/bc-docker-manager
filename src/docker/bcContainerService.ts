@@ -44,11 +44,37 @@ export class BcContainerService {
 
   // ── shell helper ─────────────────────────────────────────────
 
+  /**
+   * Strip ANSI escape sequences and reduce a multi-line PowerShell error to
+   * the single most relevant message. PowerShell writes the actual error value
+   * on a line formatted as "     | Error text here"; this extracts that line
+   * and prepends the cmdlet name from the first line.
+   *
+   * Falls back to the first non-empty line when no structured PS format is found.
+   */
+  private static cleanPsError(raw: string): string {
+    // eslint-disable-next-line no-control-regex
+    const clean = raw.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "").trim();
+    if (!clean) { return ""; }
+
+    const lines = clean.split(/\r?\n/);
+    // PowerShell puts the actual error value on lines like "     | Your message."
+    // Lines with only tildes ("     |     ~~~~~") are underlines — skip them.
+    const valueLine = lines.find(l => /^\s*\|\s+[^~\s]/.test(l));
+    if (valueLine) {
+      const msg = valueLine.replace(/^\s*\|\s+/, "").trim();
+      const cmdlet = lines[0].split(/\s*:\s*/)[0].trim();
+      return cmdlet ? `${cmdlet}: ${msg}` : msg;
+    }
+
+    return lines.find(l => l.trim())?.trim() ?? clean;
+  }
+
   private exec(command: string, timeoutMs = EXEC_TIMEOUT_MS): Promise<string> {
     return new Promise((resolve, reject) => {
       exec(command, { timeout: timeoutMs, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
         if (err) {
-          reject(new Error(stderr?.trim() || err.message));
+          reject(new Error(BcContainerService.cleanPsError(stderr) || err.message));
           return;
         }
         resolve(stdout);
