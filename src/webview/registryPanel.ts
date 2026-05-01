@@ -174,7 +174,7 @@ export class RegistryPanel {
         if (/[A-Z]/.test(v)) {
           return "Container name must be lowercase. BC uses the name as a hostname - uppercase letters are not valid.";
         }
-        if (!/^[a-z0-9][a-z0-9_.-]*$/.test(v)) {
+        if (!/^[a-z0-9][a-z0-9.-]*$/.test(v)) {
           return "Invalid container name. Use lowercase letters, numbers, dash, or dot.";
         }
         if (v.includes("_")) {
@@ -191,7 +191,11 @@ export class RegistryPanel {
       vscode.window.showErrorMessage("Container name must be lowercase - BC uses the name as a hostname.");
       return;
     }
-    if (!/^[a-z0-9][a-z0-9_.-]*$/.test(name)) {
+    if (name.includes("_")) {
+      vscode.window.showErrorMessage("Underscores are not valid in DNS hostnames and will cause SSL and networking issues. Use a dash instead.");
+      return;
+    }
+    if (!/^[a-z0-9][a-z0-9.-]*$/.test(name)) {
       vscode.window.showErrorMessage("Invalid container name. Use lowercase letters, numbers, dash, or dot.");
       return;
     }
