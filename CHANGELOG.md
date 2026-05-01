@@ -7,6 +7,22 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.5.0] - 2026-05-01
+
+### Added
+
+- Set Container Note command. Right-click any container in the Containers panel and choose "Set Container Note" to attach a free-text note to it. The note is shown at the bottom of the container tooltip and persists in VS Code global state, surviving container restarts, recreations, and VS Code restarts.
+
+- Set Container Tags command. Right-click any container and choose "Set Container Tags" to attach one or more comma-separated tags (e.g. `client1, sandbox, v25`). Tags are shown as `#tag1 #tag2` appended to the container description line in the Containers panel so they are visible at a glance without hovering.
+
+- Clear Container Note and Tags command. Removes all annotations from a container in one step.
+
+### Changed
+
+- Container export no longer fails when the container name contains uppercase letters. Docker requires image repository names to be entirely lowercase. The temporary image tag created during export is now sanitized to lowercase with any non-alphanumeric characters replaced by hyphens before being passed to `docker commit` and `docker save`.
+
+---
+
 ## [1.4.0] - 2026-05-01
 
 ### Added

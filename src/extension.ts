@@ -14,6 +14,7 @@ import { ContainerTreeItem, ImageTreeItem } from "./tree/models";
 import { VolumeTreeItem } from "./tree/volumeProvider";
 import { ArtifactsLauncherProvider } from "./tree/artifactsLauncherProvider";
 import { initTelemetry, disposeTelemetry, sendEvent, sendError } from "./services/telemetry";
+import { ContainerAnnotationService } from "./services/containerAnnotationService";
 
 /**
  * Extension entry point.
@@ -33,7 +34,8 @@ export async function activate(
   const artifacts = new BcArtifactsService();
   artifacts.setStoragePath(context.globalStorageUri.fsPath);
   bcService.setProfileStoragePath(context.globalStorageUri.fsPath);
-  const containerProvider = new ContainerProvider(docker);
+  const annotations = new ContainerAnnotationService(context.globalState);
+  const containerProvider = new ContainerProvider(docker, annotations);
   const imageProvider = new ImageProvider(docker);
   const healthProvider = new DockerHealthProvider();
   const volumeProvider = new VolumeProvider(bcService);
@@ -980,6 +982,62 @@ export async function activate(
       vscode.window.showInformationMessage(`${stopped.length} container(s) removed.`);
     })
   );
+
+  // ── v1.4: Container Annotations (notes and tags) ─────────────
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "bcDockerManager.setContainerNote",
+      async (item?: ContainerTreeItem) => {
+        const name = item?.container.names ?? await pickAnyContainer(docker);
+        if (!name) { return; }
+        const existing = annotations.get(name)?.note ?? "";
+        const note = await vscode.window.showInputBox({
+          title: `Note for "${name}"`,
+          prompt: "Enter a note for this container. Leave empty to clear.",
+          value: existing,
+          ignoreFocusOut: true,
+        });
+        if (note === undefined) { return; }
+        await annotations.setNote(name, note);
+        containerProvider.refresh();
+      },
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "bcDockerManager.setContainerTags",
+      async (item?: ContainerTreeItem) => {
+        const name = item?.container.names ?? await pickAnyContainer(docker);
+        if (!name) { return; }
+        const existing = (annotations.get(name)?.tags ?? []).join(", ");
+        const raw = await vscode.window.showInputBox({
+          title: `Tags for "${name}"`,
+          prompt: "Comma-separated tags (e.g. client1, v25, sandbox). Leave empty to clear.",
+          value: existing,
+          ignoreFocusOut: true,
+        });
+        if (raw === undefined) { return; }
+        const tags = raw.split(",").map((t) => t.trim()).filter(Boolean);
+        await annotations.setTags(name, tags);
+        containerProvider.refresh();
+      },
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "bcDockerManager.clearContainerAnnotations",
+      async (item?: ContainerTreeItem) => {
+        const name = item?.container.names ?? await pickAnyContainer(docker);
+        if (!name) { return; }
+        await annotations.clear(name);
+        containerProvider.refresh();
+        vscode.window.showInformationMessage(`Annotations cleared for "${name}".`);
+      },
+    )
+  );
 }
 
 export function deactivate(): void {
@@ -1018,6 +1076,25 @@ async function pickRunningContainer(docker: DockerService): Promise<string | und
   const pick = await vscode.window.showQuickPick(
     running.map((c: { names: string; image: string }) => ({ label: c.names, description: c.image })),
     { placeHolder: "Select a running container" },
+  );
+  return pick?.label;
+}
+
+async function pickAnyContainer(docker: DockerService): Promise<string | undefined> {
+  const containers = await docker.getContainers();
+  if (containers.length === 0) {
+    vscode.window.showWarningMessage("No containers found.");
+    return undefined;
+  }
+  if (containers.length === 1) {
+    return containers[0].names;
+  }
+  const pick = await vscode.window.showQuickPick(
+    containers.map((c: { names: string; state: string }) => ({
+      label: c.names,
+      description: c.state,
+    })),
+    { placeHolder: "Select a container" },
   );
   return pick?.label;
 }

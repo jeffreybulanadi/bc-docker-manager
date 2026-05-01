@@ -1236,7 +1236,8 @@ export class BcContainerService {
       { location: vscode.ProgressLocation.Notification, title: `Exporting "${containerName}"…` },
       async (progress) => {
         progress.report({ message: "Committing container to image…" });
-        const imageName = `${containerName}-export:latest`;
+        const safeTag = containerName.toLowerCase().replace(/[^a-z0-9._-]/g, "-");
+        const imageName = `${safeTag}-export:latest`;
         await this.exec(`docker commit ${containerName} ${imageName}`, 600_000);
 
         progress.report({ message: "Saving image to file…" });

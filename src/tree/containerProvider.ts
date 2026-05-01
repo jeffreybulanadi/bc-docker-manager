@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { DockerService } from "../docker/dockerService";
 import { ContainerTreeItem, InitializingContainerTreeItem } from "./models";
+import { ContainerAnnotationService } from "../services/containerAnnotationService";
 
 /**
  * Provides container data for the "Containers" tree view.
@@ -25,7 +26,10 @@ export class ContainerProvider
   /** name (without leading slash) -> current phase label */
   private readonly _initializingContainers = new Map<string, string>();
 
-  constructor(private readonly docker: DockerService) {}
+  constructor(
+    private readonly docker: DockerService,
+    private readonly annotations?: ContainerAnnotationService
+  ) {}
 
   getTreeItem(element: ContainerTreeItem | InitializingContainerTreeItem): vscode.TreeItem {
     return element;
@@ -53,8 +57,10 @@ export class ContainerProvider
 
       // Real container items, with phase overlay while still initializing.
       for (const c of containers) {
-        const item = new ContainerTreeItem(c);
-        const phase = this._initializingContainers.get(c.names.replace(/^\//, ""));
+        const name = c.names.replace(/^\//, "");
+        const annotation = this.annotations?.get(name);
+        const item = new ContainerTreeItem(c, annotation);
+        const phase = this._initializingContainers.get(name);
         if (phase) {
           item.description = phase;
           item.iconPath = new vscode.ThemeIcon("loading~spin");

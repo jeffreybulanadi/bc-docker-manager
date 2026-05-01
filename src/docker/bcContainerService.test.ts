@@ -1032,6 +1032,21 @@ describe("exportContainer", () => {
     );
   });
 
+  it("sanitizes uppercase container name to lowercase image tag", async () => {
+    (vscode.window.showSaveDialog as jest.Mock).mockResolvedValueOnce({
+      fsPath: "C:\\exports\\OpenFolder.tar",
+    });
+    fakeExecOk("sha256:abc123");
+    fakeExecOk("");
+    fakeExecOk("");
+
+    await svc.exportContainer("OpenFolder");
+
+    expect(mockExec.mock.calls[0][0]).toBe("docker commit OpenFolder openfolder-export:latest");
+    expect(mockExec.mock.calls[1][0]).toBe('docker save -o "C:\\exports\\OpenFolder.tar" openfolder-export:latest');
+    expect(mockExec.mock.calls[2][0]).toBe("docker rmi openfolder-export:latest");
+  });
+
   it("still succeeds when rmi cleanup fails", async () => {
     (vscode.window.showSaveDialog as jest.Mock).mockResolvedValueOnce({
       fsPath: "C:\\out.tar",
