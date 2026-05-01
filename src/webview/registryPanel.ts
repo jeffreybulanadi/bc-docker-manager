@@ -186,7 +186,15 @@ export class RegistryPanel {
         return undefined;
       },
     });
-    if (!name) { return; } // cancelled
+    if (!name) { return; }
+    if (/[A-Z]/.test(name)) {
+      vscode.window.showErrorMessage("Container name must be lowercase - BC uses the name as a hostname.");
+      return;
+    }
+    if (!/^[a-z0-9][a-z0-9_.-]*$/.test(name)) {
+      vscode.window.showErrorMessage("Invalid container name. Use lowercase letters, numbers, dash, or dot.");
+      return;
+    }
 
     // 3. Credentials
     const username = await vscode.window.showInputBox({
