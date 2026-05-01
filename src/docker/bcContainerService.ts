@@ -1,4 +1,4 @@
-import { exec } from "child_process";
+import { exec, spawn } from "child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -12,10 +12,17 @@ const EXEC_TIMEOUT_MS = 120_000; // BC operations can be slow
 const BC_SERVER_INSTANCE = "BC";
 const CONTAINER_TEMP = "C:\\run\\my";
 
-/** Max bytes per write chunk: base64 of 5 000 bytes is ~6 700 chars, safely under the 8 191-char cmd.exe command line limit. */
-const CONTAINER_WRITE_CHUNK = 5_000;
-/** Max bytes per read chunk: 50 000 bytes produces ~66 KB of base64 stdout, well under the 10 MB exec buffer. */
-const CONTAINER_READ_CHUNK = 50_000;
+/**
+ * Chunk size for streaming file transfers between host and container.
+ * 49 152 bytes = 48 KB = 16 384 × 3, so every full chunk base64-encodes
+ * with zero padding characters. Only the final (possibly smaller) chunk
+ * may carry '=' padding. This lets the container and host decode each
+ * chunk independently without boundary ambiguity.
+ */
+const FILE_TRANSFER_CHUNK = 49_152;
+
+/** Maximum wall-clock time for a single file transfer (30 minutes). */
+const FILE_TRANSFER_TIMEOUT_MS = 1_800_000;
 
 /**
  * Import the NAV/BC management module inside the container.
@@ -114,61 +121,176 @@ export class BcContainerService {
   }
 
   /**
-   * Write a host file into a container using chunked Base64 via docker exec.
-   * Works with both Hyper-V and Process isolation containers.
-   * docker cp is not used because Hyper-V containers block direct filesystem operations.
+   * Write a host file into a container by streaming base64-encoded lines
+   * through a single `docker exec -i` stdin pipe.
+   *
+   * A single spawn replaces N sequential exec calls, eliminating per-chunk
+   * PowerShell process startup overhead (~400 ms each).
+   *
+   * Protocol: the host reads the file in FILE_TRANSFER_CHUNK-byte slices
+   * (multiple of 3 bytes so each slice produces clean base64 without '='
+   * padding). Each slice is written as a base64 line to stdin. The container
+   * PowerShell reads each line, decodes it, and appends the raw bytes to the
+   * target file. EOF (stdin close) signals the container to flush and exit.
+   *
+   * Backpressure: if proc.stdin signals full, the host read stream is paused
+   * until the drain event fires, preventing unbounded memory growth.
    */
-  private async writeFileToContainer(
+  private writeFileToContainer(
     containerName: string,
     hostPath: string,
     containerPath: string,
+    timeoutMs = FILE_TRANSFER_TIMEOUT_MS,
   ): Promise<void> {
-    const content = fs.readFileSync(hostPath);
     const ep = BcContainerService.escapePsPath(containerPath);
+    const psCmd =
+      `$s=[IO.File]::Create('${ep}');` +
+      `while(($l=[Console]::In.ReadLine()) -ne $null){` +
+      `$t=$l.Trim();if($t.Length -gt 0){$b=[Convert]::FromBase64String($t);$s.Write($b,0,$b.Length)}};` +
+      `$s.Dispose()`;
 
-    if (content.length === 0) {
-      await this.execInContainer(containerName, `[System.IO.File]::WriteAllBytes('${ep}',@())`, 10_000);
-      return;
-    }
+    return new Promise<void>((resolve, reject) => {
+      const proc = spawn("docker", ["exec", "-i", containerName, "powershell", "-NoProfile", "-Command", psCmd]);
+      let stderr = "";
+      let settled = false;
 
-    for (let offset = 0; offset < content.length; offset += CONTAINER_WRITE_CHUNK) {
-      const b64 = content.slice(offset, offset + CONTAINER_WRITE_CHUNK).toString("base64");
-      const ps = offset === 0
-        ? `[System.IO.File]::WriteAllBytes('${ep}',[System.Convert]::FromBase64String('${b64}'))`
-        : `$s=[System.IO.File]::Open('${ep}',[System.IO.FileMode]::Append,[System.IO.FileAccess]::Write);$b=[System.Convert]::FromBase64String('${b64}');$s.Write($b,0,$b.Length);$s.Close()`;
-      await this.execInContainer(containerName, ps, 30_000);
-    }
+      const fail = (err: Error) => {
+        if (settled) { return; }
+        settled = true;
+        proc.kill();
+        reject(err);
+      };
+
+      const timer = setTimeout(
+        () => fail(new Error("File transfer timed out")),
+        timeoutMs,
+      );
+
+      proc.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
+      proc.on("error", (err: Error) => { clearTimeout(timer); fail(err); });
+      proc.on("close", (code: number | null) => {
+        clearTimeout(timer);
+        if (settled) { return; }
+        settled = true;
+        if (code !== 0) {
+          reject(new Error(BcContainerService.cleanPsError(stderr) || `Transfer process exited with code ${code}`));
+        } else {
+          resolve();
+        }
+      });
+
+      const readStream = fs.createReadStream(hostPath, { highWaterMark: FILE_TRANSFER_CHUNK });
+      let pending = Buffer.alloc(0);
+
+      readStream.on("data", (chunk: Buffer) => {
+        const buf = pending.length ? Buffer.concat([pending, chunk]) : chunk;
+        const usable = buf.length - (buf.length % 3);
+        if (usable > 0) {
+          const canContinue = proc.stdin.write(buf.slice(0, usable).toString("base64") + "\n");
+          pending = buf.slice(usable);
+          if (!canContinue) {
+            readStream.pause();
+            proc.stdin.once("drain", () => readStream.resume());
+          }
+        } else {
+          pending = buf;
+        }
+      });
+
+      readStream.on("end", () => {
+        if (pending.length > 0) {
+          proc.stdin.write(pending.toString("base64") + "\n");
+        }
+        proc.stdin.end();
+      });
+
+      readStream.on("error", (err: Error) => { clearTimeout(timer); fail(err); });
+    });
   }
 
   /**
-   * Read a file from a container to the host using chunked Base64 via docker exec.
-   * Works with both Hyper-V and Process isolation containers.
+   * Read a file from a container to the host by streaming base64-encoded
+   * bytes through a single `docker exec` stdout pipe.
+   *
+   * A single spawn replaces N sequential exec calls, eliminating per-chunk
+   * PowerShell process startup overhead and the 10 MB exec maxBuffer limit.
+   *
+   * Protocol: the container PowerShell opens the file and reads it in
+   * FILE_TRANSFER_CHUNK-byte slices (multiple of 3 so all but the final
+   * slice produce clean, padding-free base64). Each slice is written to
+   * stdout via [Console]::Write() to bypass the PowerShell pipeline. The
+   * host decodes base64 quanta (groups of 4 chars = 3 raw bytes) on the fly
+   * and writes them directly to a write stream, keeping host memory usage
+   * proportional to the chunk size rather than the file size.
+   *
+   * Backpressure: if the write stream signals full, proc.stdout is paused
+   * until drain fires.
    */
-  private async readFileFromContainer(
+  private readFileFromContainer(
     containerName: string,
     containerPath: string,
     hostPath: string,
+    timeoutMs = FILE_TRANSFER_TIMEOUT_MS,
   ): Promise<void> {
     const ep = BcContainerService.escapePsPath(containerPath);
-    const sizeStr = await this.execInContainer(
-      containerName,
-      `(Get-Item '${ep}').Length`,
-      10_000,
-    );
-    const fileSize = parseInt(sizeStr.trim(), 10);
-    const parts: Buffer[] = [];
+    const psCmd =
+      `$f=[IO.File]::OpenRead('${ep}');` +
+      `$b=New-Object byte[] ${FILE_TRANSFER_CHUNK};` +
+      `while(($r=$f.Read($b,0,${FILE_TRANSFER_CHUNK}))-gt 0){[Console]::Write([Convert]::ToBase64String($b,0,$r))};` +
+      `$f.Close()`;
 
-    for (let offset = 0; offset < fileSize; offset += CONTAINER_READ_CHUNK) {
-      const len = Math.min(CONTAINER_READ_CHUNK, fileSize - offset);
-      const b64 = await this.execInContainer(
-        containerName,
-        `$f=[System.IO.File]::OpenRead('${ep}');$f.Seek(${offset},[System.IO.SeekOrigin]::Begin)|Out-Null;$b=New-Object byte[] ${len};$f.Read($b,0,${len})|Out-Null;$f.Close();[System.Convert]::ToBase64String($b)`,
-        30_000,
-      );
-      parts.push(Buffer.from(b64.trim(), "base64"));
-    }
+    return new Promise<void>((resolve, reject) => {
+      const proc = spawn("docker", ["exec", containerName, "powershell", "-NoProfile", "-Command", psCmd]);
+      const writeStream = fs.createWriteStream(hostPath);
+      let b64Buf = "";
+      let stderr = "";
+      let settled = false;
 
-    fs.writeFileSync(hostPath, Buffer.concat(parts));
+      const fail = (err: Error) => {
+        if (settled) { return; }
+        settled = true;
+        writeStream.destroy();
+        try { fs.unlinkSync(hostPath); } catch { /* ignore */ }
+        reject(err);
+      };
+
+      const timer = setTimeout(() => { proc.kill(); fail(new Error("File transfer timed out")); }, timeoutMs);
+
+      writeStream.on("error", (err: Error) => { clearTimeout(timer); proc.kill(); fail(err); });
+      proc.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
+
+      proc.stdout.on("data", (chunk: Buffer) => {
+        b64Buf += chunk.toString("ascii");
+        const usable = b64Buf.length - (b64Buf.length % 4);
+        if (usable >= 4) {
+          const decoded = Buffer.from(b64Buf.slice(0, usable), "base64");
+          b64Buf = b64Buf.slice(usable);
+          const canContinue = writeStream.write(decoded);
+          if (!canContinue) {
+            proc.stdout.pause();
+            writeStream.once("drain", () => proc.stdout.resume());
+          }
+        }
+      });
+
+      proc.on("error", (err: Error) => { clearTimeout(timer); fail(err); });
+      proc.on("close", (code: number | null) => {
+        clearTimeout(timer);
+        if (settled) { return; }
+        if (code !== 0) {
+          fail(new Error(BcContainerService.cleanPsError(stderr) || `Transfer process exited with code ${code}`));
+          return;
+        }
+        if (b64Buf.length > 0) {
+          writeStream.write(Buffer.from(b64Buf, "base64"));
+          b64Buf = "";
+        }
+        writeStream.end(() => {
+          settled = true;
+          resolve();
+        });
+      });
+    });
   }
 
   /**
