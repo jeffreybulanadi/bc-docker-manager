@@ -167,12 +167,21 @@ export class RegistryPanel {
     const defaultName = `bc${version.split(".")[0]}${country}`;
     const name = await vscode.window.showInputBox({
       title: "Create BC Container (1/3): Name",
-      prompt: "Container name (lowercase, no spaces)",
+      prompt: "Container name (lowercase letters, numbers, dash or dot — BC uses this as the hostname)",
       value: defaultName,
       validateInput: (v) => {
         if (!v) { return "Name is required"; }
-        if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(v)) {
-          return "Invalid container name. Use letters, numbers, dash, dot, or underscore";
+        if (/[A-Z]/.test(v)) {
+          return "Container name must be lowercase. BC uses the name as a hostname — uppercase letters are not valid.";
+        }
+        if (!/^[a-z0-9][a-z0-9_.-]*$/.test(v)) {
+          return "Invalid container name. Use lowercase letters, numbers, dash, or dot.";
+        }
+        if (v.includes("_")) {
+          return {
+            message: "Underscores are not valid in DNS hostnames and can cause SSL and networking issues. Consider using a dash instead.",
+            severity: vscode.InputBoxValidationSeverity.Warning,
+          };
         }
         return undefined;
       },

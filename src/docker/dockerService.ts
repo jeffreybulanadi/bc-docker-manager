@@ -709,18 +709,37 @@ export class DockerService implements vscode.Disposable {
 
   // ── host networking helpers ───────────────────────────────
 
+  private static readonly IPV4_PATTERN = /^(\d{1,3}\.){3}\d{1,3}$/;
+
   /**
-   * Get the NAT IP address of a container.
-   * With Hyper-V isolation the container gets its own IP on the nat network.
+   * Resolve the IP address of a running container.
+   *
+   * Probes the `nat` network first (Windows containers), then `bridge`
+   * (Linux containers), then falls back to iterating every attached network.
+   * Each candidate is validated against a basic IPv4 pattern so that Docker
+   * daemon warnings or template errors can never propagate as a hostname.
    */
   async getContainerIp(nameOrId: string): Promise<string | undefined> {
+    for (const net of ["nat", "bridge"]) {
+      try {
+        const raw = await this.exec(
+          `docker inspect -f "{{.NetworkSettings.Networks.${net}.IPAddress}}" ${nameOrId}`,
+          10_000,
+        );
+        const ip = raw.trim();
+        if (ip && ip !== "<no value>" && DockerService.IPV4_PATTERN.test(ip)) {
+          return ip;
+        }
+      } catch { /* network absent or container not found — try next */ }
+    }
+
+    // Iterate every attached network and return the first valid IPv4.
     try {
       const raw = await this.exec(
-        `docker inspect -f "{{.NetworkSettings.Networks.nat.IPAddress}}" ${nameOrId}`,
+        `docker inspect -f "{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}" ${nameOrId}`,
         10_000,
       );
-      const ip = raw.trim();
-      return ip && ip !== "<no value>" ? ip : undefined;
+      return raw.trim().split(/\s+/).find(s => DockerService.IPV4_PATTERN.test(s));
     } catch {
       return undefined;
     }

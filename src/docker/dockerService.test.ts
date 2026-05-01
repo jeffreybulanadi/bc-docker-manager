@@ -336,10 +336,17 @@ describe("DockerService.getContainerIp", () => {
 
   afterEach(() => jest.restoreAllMocks());
 
-  it("returns a valid IP address", async () => {
+  it("returns a valid IP from the nat network", async () => {
     jest.spyOn(svc, "exec").mockResolvedValue("172.17.0.5\n");
     const ip = await svc.getContainerIp("mybc");
     expect(ip).toBe("172.17.0.5");
+  });
+
+  it("returns undefined when docker outputs a non-IPv4 string", async () => {
+    // Simulates the 'invalid IP' daemon warning scenario
+    jest.spyOn(svc, "exec").mockResolvedValue("invalid IP\n");
+    const ip = await svc.getContainerIp("mybc");
+    expect(ip).toBeUndefined();
   });
 
   it("returns undefined for <no value>", async () => {
@@ -358,6 +365,23 @@ describe("DockerService.getContainerIp", () => {
     jest.spyOn(svc, "exec").mockRejectedValue(new Error("docker not found"));
     const ip = await svc.getContainerIp("mybc");
     expect(ip).toBeUndefined();
+  });
+
+  it("falls back to the bridge network when nat has no value", async () => {
+    jest.spyOn(svc, "exec")
+      .mockResolvedValueOnce("<no value>\n")   // nat
+      .mockResolvedValueOnce("192.168.1.5\n"); // bridge
+    const ip = await svc.getContainerIp("mybc");
+    expect(ip).toBe("192.168.1.5");
+  });
+
+  it("uses range-based fallback when named networks return no value", async () => {
+    jest.spyOn(svc, "exec")
+      .mockResolvedValueOnce("<no value>\n")        // nat
+      .mockResolvedValueOnce("<no value>\n")        // bridge
+      .mockResolvedValueOnce("10.0.0.2  \n");      // range fallback
+    const ip = await svc.getContainerIp("mybc");
+    expect(ip).toBe("10.0.0.2");
   });
 });
 

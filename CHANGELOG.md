@@ -21,6 +21,10 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 - Container export no longer fails when the container name contains uppercase letters. Docker requires image repository names to be entirely lowercase. The temporary image tag created during export is now sanitized to lowercase with any non-alphanumeric characters replaced by hyphens before being passed to `docker commit` and `docker save`.
 
+- Container IP detection now probes both the `nat` network (Windows containers) and the `bridge` network (Linux containers) and validates that the result is a well-formed IPv4 address before using it. Previously any non-empty string returned by `docker inspect` was accepted, so daemon warnings like `"invalid IP"` could end up embedded in the certificate download URL and produce a PowerShell URI parse error during networking setup. A generic range-based fallback is tried last if both named networks return no value.
+
+- Container name input now rejects uppercase letters at creation time. BC uses the container name as a DNS hostname and as the CN of its self-signed SSL certificate. Uppercase letters are not valid in hostnames per RFC 952 and 1123, and using them caused networking setup to fail silently. A warning is shown if the name contains underscores, which are also not valid in DNS hostnames and can break certificate validation.
+
 ---
 
 ## [1.4.0] - 2026-05-01
