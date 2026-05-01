@@ -12,6 +12,11 @@ const EXEC_TIMEOUT_MS = 120_000; // BC operations can be slow
 const BC_SERVER_INSTANCE = "BC";
 const CONTAINER_TEMP = "C:\\run\\my";
 
+/** Max bytes per write chunk: base64 of 5 000 bytes is ~6 700 chars, safely under the 8 191-char cmd.exe command line limit. */
+const CONTAINER_WRITE_CHUNK = 5_000;
+/** Max bytes per read chunk: 50 000 bytes produces ~66 KB of base64 stdout, well under the 10 MB exec buffer. */
+const CONTAINER_READ_CHUNK = 50_000;
+
 /**
  * Import the NAV/BC management module inside the container.
  * Required because we use `-NoProfile` to avoid slow profile loading
@@ -25,7 +30,8 @@ const NAV_MODULE_IMPORT =
 
 /**
  * BC-specific operations that run inside a Business Central container
- * via `docker exec` + PowerShell cmdlets or `docker cp`.
+ * via `docker exec` + PowerShell cmdlets. All file transfers use chunked
+ * Base64 over docker exec to support both Process and Hyper-V isolation.
  *
  * This keeps dockerService.ts focused on generic Docker operations.
  */
@@ -76,22 +82,105 @@ export class BcContainerService {
     );
   }
 
-  /** Copy a file from host into a container. */
-  private async copyToContainer(
-    containerName: string,
-    hostPath: string,
-    containerPath: string,
-  ): Promise<void> {
-    await this.exec(`docker cp "${hostPath}" ${containerName}:${containerPath}`);
+  /** Escape single quotes in a path for use inside a PowerShell single-quoted string. */
+  private static escapePsPath(p: string): string {
+    return p.replace(/'/g, "''");
   }
 
-  /** Copy a file from a container to host. */
-  private async copyFromContainer(
+  /**
+   * Write a host file into a container using chunked Base64 via docker exec.
+   * Works with both Hyper-V and Process isolation containers.
+   * docker cp is not used because Hyper-V containers block direct filesystem operations.
+   */
+  private async writeFileToContainer(
+    containerName: string,
+    hostPath: string,
+    containerPath: string,
+  ): Promise<void> {
+    const content = fs.readFileSync(hostPath);
+    const ep = BcContainerService.escapePsPath(containerPath);
+
+    if (content.length === 0) {
+      await this.execInContainer(containerName, `[System.IO.File]::WriteAllBytes('${ep}',@())`, 10_000);
+      return;
+    }
+
+    for (let offset = 0; offset < content.length; offset += CONTAINER_WRITE_CHUNK) {
+      const b64 = content.slice(offset, offset + CONTAINER_WRITE_CHUNK).toString("base64");
+      const ps = offset === 0
+        ? `[System.IO.File]::WriteAllBytes('${ep}',[System.Convert]::FromBase64String('${b64}'))`
+        : `$s=[System.IO.File]::Open('${ep}',[System.IO.FileMode]::Append,[System.IO.FileAccess]::Write);$b=[System.Convert]::FromBase64String('${b64}');$s.Write($b,0,$b.Length);$s.Close()`;
+      await this.execInContainer(containerName, ps, 30_000);
+    }
+  }
+
+  /**
+   * Read a file from a container to the host using chunked Base64 via docker exec.
+   * Works with both Hyper-V and Process isolation containers.
+   */
+  private async readFileFromContainer(
     containerName: string,
     containerPath: string,
     hostPath: string,
   ): Promise<void> {
-    await this.exec(`docker cp ${containerName}:${containerPath} "${hostPath}"`);
+    const ep = BcContainerService.escapePsPath(containerPath);
+    const sizeStr = await this.execInContainer(
+      containerName,
+      `(Get-Item '${ep}').Length`,
+      10_000,
+    );
+    const fileSize = parseInt(sizeStr.trim(), 10);
+    const parts: Buffer[] = [];
+
+    for (let offset = 0; offset < fileSize; offset += CONTAINER_READ_CHUNK) {
+      const len = Math.min(CONTAINER_READ_CHUNK, fileSize - offset);
+      const b64 = await this.execInContainer(
+        containerName,
+        `$f=[System.IO.File]::OpenRead('${ep}');$f.Seek(${offset},[System.IO.SeekOrigin]::Begin)|Out-Null;$b=New-Object byte[] ${len};$f.Read($b,0,${len})|Out-Null;$f.Close();[System.Convert]::ToBase64String($b)`,
+        30_000,
+      );
+      parts.push(Buffer.from(b64.trim(), "base64"));
+    }
+
+    fs.writeFileSync(hostPath, Buffer.concat(parts));
+  }
+
+  /**
+   * Copy a host directory into a container using a zip transfer via docker exec.
+   * Compresses the directory on the host, transfers the zip in Base64 chunks,
+   * and expands it inside the container. Works with Hyper-V containers.
+   */
+  private async writeDirToContainer(
+    containerName: string,
+    hostDir: string,
+    containerDir: string,
+  ): Promise<void> {
+    const zipPath = path.join(os.tmpdir(), `bcm_${Date.now()}.zip`);
+    const eZip = BcContainerService.escapePsPath(zipPath);
+    const eHostDir = BcContainerService.escapePsPath(hostDir);
+    const eContainerDir = BcContainerService.escapePsPath(containerDir);
+    const containerZip = `${containerDir}.zip`;
+    const eContainerZip = BcContainerService.escapePsPath(containerZip);
+
+    try {
+      await this.exec(
+        `powershell -NoProfile -Command "Compress-Archive -Path '${eHostDir}\\*' -DestinationPath '${eZip}' -Force"`,
+        60_000,
+      );
+      await this.execInContainer(
+        containerName,
+        `New-Item -Path '${eContainerDir}' -ItemType Directory -Force | Out-Null`,
+        15_000,
+      );
+      await this.writeFileToContainer(containerName, zipPath, containerZip);
+      await this.execInContainer(
+        containerName,
+        `Expand-Archive -Path '${eContainerZip}' -DestinationPath '${eContainerDir}' -Force; Remove-Item '${eContainerZip}' -Force -ErrorAction SilentlyContinue`,
+        120_000,
+      );
+    } finally {
+      fs.rmSync(zipPath, { force: true });
+    }
   }
 
   // ── v1.1: Copy Container IP ──────────────────────────────────
@@ -136,8 +225,8 @@ export class BcContainerService {
         ]);
 
         // Step 2: Copy .app file into container
-        progress.report({ message: "Copying app to container…" });
-        await this.copyToContainer(containerName, hostPath, containerPath);
+        progress.report({ message: "Copying app to container..." });
+        await this.writeFileToContainer(containerName, hostPath, containerPath);
 
         // Step 3: Publish the app
         progress.report({ message: "Publishing app…" });
@@ -217,12 +306,12 @@ export class BcContainerService {
     await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: "Importing license…" },
       async (progress) => {
-        progress.report({ message: "Copying license to container…" });
+        progress.report({ message: "Copying license to container..." });
         await this.execInContainer(
           containerName,
           `if (!(Test-Path '${CONTAINER_TEMP}')) { New-Item -Path '${CONTAINER_TEMP}' -ItemType Directory -Force | Out-Null }`,
         );
-        await this.copyToContainer(containerName, hostPath, containerPath);
+        await this.writeFileToContainer(containerName, hostPath, containerPath);
 
         const serverInstance = await this.getServerInstance(containerName);
 
@@ -364,8 +453,8 @@ export class BcContainerService {
           600_000, // 10 min timeout for large DBs
         );
 
-        progress.report({ message: "Copying backup to host…" });
-        await this.copyFromContainer(containerName, containerBakPath, saveUri.fsPath);
+        progress.report({ message: "Copying backup to host..." });
+        await this.readFileFromContainer(containerName, containerBakPath, saveUri.fsPath);
 
         // Cleanup inside container
         await this.execInContainer(
@@ -410,8 +499,8 @@ export class BcContainerService {
           ),
         ]);
 
-        progress.report({ message: "Copying backup to container…" });
-        await this.copyToContainer(containerName, hostPath, containerBakPath);
+        progress.report({ message: "Copying backup to container..." });
+        await this.writeFileToContainer(containerName, hostPath, containerBakPath);
 
         progress.report({ message: "Stopping service tier…" });
         await this.execNavInContainer(
@@ -818,9 +907,9 @@ export class BcContainerService {
         }
 
         // Copy workspace to container
-        progress.report({ message: "Copying project to container…" });
+        progress.report({ message: "Copying project to container..." });
         const containerProjectPath = `C:\\temp\\alproject_${Date.now()}`;
-        await this.exec(`docker cp "${targetFolder.uri.fsPath}" ${containerName}:${containerProjectPath}`);
+        await this.writeDirToContainer(containerName, targetFolder.uri.fsPath, containerProjectPath);
 
         // Find symbol files
         const symbolPath = await this.execInContainer(
@@ -850,9 +939,9 @@ export class BcContainerService {
 
         if (outputExists.trim().toLowerCase() === "true") {
           // Copy back to host
-          progress.report({ message: "Copying compiled app to host…" });
+          progress.report({ message: "Copying compiled app to host..." });
           const outputPath = path.join(targetFolder.uri.fsPath, "output.app");
-          await this.copyFromContainer(containerName, `${containerProjectPath}\\output.app`, outputPath);
+          await this.readFileFromContainer(containerName, `${containerProjectPath}\\output.app`, outputPath);
           vscode.window.showInformationMessage(`Compiled app saved to ${outputPath}`);
         } else {
           vscode.window.showWarningMessage("Compilation completed with errors. Check the output channel.");

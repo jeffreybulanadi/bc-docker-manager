@@ -2,7 +2,8 @@
  * Unit tests for BcContainerService.
  *
  * Tests focus on:
- *  - Shell helpers (exec, execInContainer, copy) via casting to `any`
+ *  - Shell helpers (exec, execInContainer) via casting to `any`
+ *  - File transfer helpers (writeFileToContainer, readFileFromContainer) via Base64 chunking
  *  - Cached metadata (getContainerInfo with TTL)
  *  - Copy Container IP
  *  - Volume parsing (getVolumes, removeVolume)
@@ -129,25 +130,83 @@ describe("execInContainer", () => {
   });
 });
 
-// ─── copyToContainer / copyFromContainer (private) ───────────────
+// ─── writeFileToContainer (private) ──────────────────────────────
 
-describe("copyToContainer", () => {
-  it("runs docker cp from host to container", async () => {
+describe("writeFileToContainer", () => {
+  it("writes an empty file via WriteAllBytes with empty array", async () => {
+    mockFs.readFileSync.mockReturnValueOnce(Buffer.alloc(0));
+    fakeExecOk(""); // execInContainer for empty file
+    await (svc as any).writeFileToContainer("mybc", "C:\\host\\empty.txt", "C:\\run\\my\\empty.txt");
+    const cmd: string = mockExec.mock.calls[0][0];
+    expect(cmd).toContain("WriteAllBytes");
+    expect(cmd).toContain("@()");
+  });
+
+  it("writes a single-chunk file via WriteAllBytes", async () => {
+    const data = Buffer.from("hello BC");
+    mockFs.readFileSync.mockReturnValueOnce(data);
+    fakeExecOk(""); // execInContainer for single chunk
+    await (svc as any).writeFileToContainer("mybc", "C:\\host\\lic.flf", "C:\\run\\my\\lic.flf");
+    const cmd: string = mockExec.mock.calls[0][0];
+    expect(cmd).toContain("WriteAllBytes");
+    expect(cmd).toContain(data.toString("base64"));
+  });
+
+  it("writes a multi-chunk file using WriteAllBytes then FileStream append", async () => {
+    const data = Buffer.alloc(5_001, 0xAB); // 5001 bytes => 2 chunks
+    mockFs.readFileSync.mockReturnValueOnce(data);
+    fakeExecOk(""); // chunk 1
+    fakeExecOk(""); // chunk 2
+    await (svc as any).writeFileToContainer("mybc", "C:\\host\\big.bak", "C:\\run\\big.bak");
+    expect(mockExec).toHaveBeenCalledTimes(2);
+    const firstCmd: string = mockExec.mock.calls[0][0];
+    const secondCmd: string = mockExec.mock.calls[1][0];
+    expect(firstCmd).toContain("WriteAllBytes");
+    expect(secondCmd).toContain("System.IO.File]::Open");
+    expect(secondCmd).toContain("Append");
+  });
+
+  it("escapes single quotes in container path", async () => {
+    const data = Buffer.from("x");
+    mockFs.readFileSync.mockReturnValueOnce(data);
     fakeExecOk("");
-    await (svc as any).copyToContainer("mybc", "C:\\temp\\file.app", "C:\\run\\my\\file.app");
-    expect(mockExec.mock.calls[0][0]).toBe(
-      'docker cp "C:\\temp\\file.app" mybc:C:\\run\\my\\file.app',
-    );
+    await (svc as any).writeFileToContainer("mybc", "C:\\host\\f.txt", "C:\\path with 'quotes'\\f.txt");
+    const cmd: string = mockExec.mock.calls[0][0];
+    expect(cmd).toContain("C:\\path with ''quotes''\\f.txt");
   });
 });
 
-describe("copyFromContainer", () => {
-  it("runs docker cp from container to host", async () => {
-    fakeExecOk("");
-    await (svc as any).copyFromContainer("mybc", "C:\\temp\\backup.bak", "D:\\backups\\backup.bak");
-    expect(mockExec.mock.calls[0][0]).toBe(
-      'docker cp mybc:C:\\temp\\backup.bak "D:\\backups\\backup.bak"',
+// ─── readFileFromContainer (private) ─────────────────────────────
+
+describe("readFileFromContainer", () => {
+  it("reads a file in a single chunk and writes to host", async () => {
+    const fileContent = Buffer.from("recovered data");
+    const b64 = fileContent.toString("base64");
+    fakeExecOk(`${fileContent.length}\n`); // Get-Item Length
+    fakeExecOk(`${b64}\n`);                // single read chunk
+    mockFs.writeFileSync.mockImplementation(() => {});
+    await (svc as any).readFileFromContainer("mybc", "C:\\run\\out.bak", "D:\\local\\out.bak");
+    expect(mockFs.writeFileSync).toHaveBeenCalledWith(
+      "D:\\local\\out.bak",
+      expect.any(Buffer),
     );
+    const written: Buffer = (mockFs.writeFileSync as jest.Mock).mock.calls[0][1];
+    expect(written.toString()).toBe("recovered data");
+  });
+
+  it("concatenates multiple chunks correctly", async () => {
+    const chunk1 = Buffer.alloc(50_000, 0x01);
+    const chunk2 = Buffer.alloc(100, 0x02);
+    const fileSize = 50_100;
+    fakeExecOk(`${fileSize}\n`);
+    fakeExecOk(`${chunk1.toString("base64")}\n`);
+    fakeExecOk(`${chunk2.toString("base64")}\n`);
+    mockFs.writeFileSync.mockImplementation(() => {});
+    await (svc as any).readFileFromContainer("mybc", "C:\\run\\big.bak", "D:\\big.bak");
+    const written: Buffer = (mockFs.writeFileSync as jest.Mock).mock.calls[0][1];
+    expect(written.length).toBe(50_100);
+    expect(written[0]).toBe(0x01);
+    expect(written[50_000]).toBe(0x02);
   });
 });
 
