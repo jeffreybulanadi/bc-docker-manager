@@ -2,7 +2,8 @@
  * Unit tests for BcContainerService.
  *
  * Tests focus on:
- *  - Shell helpers (exec, execInContainer, copy) via casting to `any`
+ *  - Shell helpers (exec, execInContainer) via casting to `any`
+ *  - File transfer helpers (writeFileToContainer, readFileFromContainer) via spawn streaming
  *  - Cached metadata (getContainerInfo with TTL)
  *  - Copy Container IP
  *  - Volume parsing (getVolumes, removeVolume)
@@ -11,17 +12,20 @@
  *  - Export / Import
  */
 
-import { exec } from "child_process";
+import { exec, spawn } from "child_process";
+import { EventEmitter } from "events";
 import * as fs from "fs";
 import * as vscode from "vscode";
 import { BcContainerService } from "./bcContainerService";
 
 jest.mock("child_process", () => ({
   exec: jest.fn(),
+  spawn: jest.fn(),
 }));
 jest.mock("fs");
 
 const mockExec = exec as unknown as jest.Mock;
+const mockSpawn = spawn as unknown as jest.Mock;
 const mockFs = fs as jest.Mocked<typeof fs>;
 
 /** Simulate a successful child_process.exec call. */
@@ -38,6 +42,69 @@ function fakeExecFail(stderr: string) {
   });
 }
 
+/** Create a mock proc returned by spawn() that fires close(0) after stdout data. */
+function makeSpawnProc() {
+  const proc = new EventEmitter() as any;
+  proc.stdout = new EventEmitter() as any;
+  proc.stdout.pause = jest.fn();
+  proc.stdout.resume = jest.fn();
+  proc.stderr = new EventEmitter();
+  proc.stdin = { write: jest.fn().mockReturnValue(true), end: jest.fn(), once: jest.fn() };
+  proc.kill = jest.fn();
+  return proc;
+}
+
+/** Simulate a successful spawn: emits stdout data then close(0). */
+function fakeSpawnOk(stdoutData = "") {
+  const proc = makeSpawnProc();
+  mockSpawn.mockImplementationOnce(() => {
+    setImmediate(() => {
+      if (stdoutData) {
+        proc.stdout.emit("data", Buffer.from(stdoutData, "ascii"));
+      }
+      proc.emit("close", 0);
+    });
+    return proc;
+  });
+  return proc;
+}
+
+/** Simulate a failing spawn: emits stderr then close(code). */
+function fakeSpawnFail(stderrData: string, code = 1) {
+  const proc = makeSpawnProc();
+  mockSpawn.mockImplementationOnce(() => {
+    setImmediate(() => {
+      if (stderrData) {
+        proc.stderr.emit("data", Buffer.from(stderrData));
+      }
+      proc.emit("close", code);
+    });
+    return proc;
+  });
+  return proc;
+}
+
+/** Create a mock fs.WriteStream that calls its end() callback asynchronously. */
+function makeWriteStream() {
+  const ws = new EventEmitter() as any;
+  ws.write = jest.fn().mockReturnValue(true);
+  ws.end = jest.fn((cb?: () => void) => { if (cb) { setImmediate(cb); } return ws; });
+  ws.destroy = jest.fn();
+  return ws;
+}
+
+/** Create a mock fs.ReadStream that emits content then ends asynchronously. */
+function makeReadStream(content: Buffer) {
+  const rs = new EventEmitter() as any;
+  rs.pause = jest.fn();
+  rs.resume = jest.fn();
+  setImmediate(() => {
+    if (content.length > 0) { rs.emit("data", content); }
+    rs.emit("end");
+  });
+  return rs;
+}
+
 /** Create a minimal mock of DockerService. */
 function createMockDocker(): any {
   return {
@@ -52,6 +119,44 @@ beforeEach(() => {
   jest.clearAllMocks();
   docker = createMockDocker();
   svc = new BcContainerService(docker);
+});
+
+// ─── cleanPsError (private static, accessed via any) ─────────────
+
+describe("cleanPsError", () => {
+  const clean = (raw: string) => (BcContainerService as any).cleanPsError(raw);
+
+  it("returns empty string for empty input", () => {
+    expect(clean("")).toBe("");
+  });
+
+  it("strips ANSI escape sequences", () => {
+    expect(clean("\x1b[31;1mSome error\x1b[0m")).toBe("Some error");
+  });
+
+  it("extracts the value line from a structured PowerShell error", () => {
+    const raw = [
+      "\x1b[31;1mImport-NAVServerLicense : \x1b[0m",
+      "Line |",
+      "  15 |     $output = Import-NAVServerLicense @cmdletArgs;",
+      "     |               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+      "     | Your program license has expired.",
+    ].join("\n");
+    expect(clean(raw)).toBe("Import-NAVServerLicense: Your program license has expired.");
+  });
+
+  it("skips underline-only lines when extracting value", () => {
+    const raw = "Set-NAVServerInstance : \n     |     ~~~~~~~~~~~\n     | Service not found.";
+    expect(clean(raw)).toBe("Set-NAVServerInstance: Service not found.");
+  });
+
+  it("falls back to first non-empty line when no PS structure found", () => {
+    expect(clean("container not found\nmore details")).toBe("container not found");
+  });
+
+  it("handles plain stderr with no ANSI and no PS structure", () => {
+    expect(clean("permission denied")).toBe("permission denied");
+  });
 });
 
 // ─── exec (private, accessed via `any`) ──────────────────────────
@@ -78,9 +183,14 @@ describe("exec", () => {
     );
   });
 
-  it("rejects with stderr message on error", async () => {
+  it("rejects with cleaned stderr message on error", async () => {
     fakeExecFail("permission denied");
     await expect((svc as any).exec("bad-cmd")).rejects.toThrow("permission denied");
+  });
+
+  it("strips ANSI codes from stderr when rejecting", async () => {
+    fakeExecFail("\x1b[31;1mContainer not found\x1b[0m");
+    await expect((svc as any).exec("bad-cmd")).rejects.toThrow("Container not found");
   });
 
   it("rejects with err.message when stderr is empty", async () => {
@@ -129,25 +239,101 @@ describe("execInContainer", () => {
   });
 });
 
-// ─── copyToContainer / copyFromContainer (private) ───────────────
+// ─── writeFileToContainer (private) ──────────────────────────────
 
-describe("copyToContainer", () => {
-  it("runs docker cp from host to container", async () => {
-    fakeExecOk("");
-    await (svc as any).copyToContainer("mybc", "C:\\temp\\file.app", "C:\\run\\my\\file.app");
-    expect(mockExec.mock.calls[0][0]).toBe(
-      'docker cp "C:\\temp\\file.app" mybc:C:\\run\\my\\file.app',
+describe("writeFileToContainer", () => {
+  it("spawns docker exec -i and pipes base64 to stdin", async () => {
+    const content = Buffer.from("hello BC");
+    mockFs.createReadStream.mockReturnValueOnce(makeReadStream(content) as any);
+    const proc = fakeSpawnOk();
+    await (svc as any).writeFileToContainer("mybc", "C:\\host\\lic.flf", "C:\\run\\my\\lic.flf");
+    expect(mockSpawn).toHaveBeenCalledWith(
+      "docker",
+      expect.arrayContaining(["-i", "mybc", "powershell"]),
     );
+    expect(proc.stdin.end).toHaveBeenCalled();
+  });
+
+  it("writes base64-encoded content as a newline-terminated line to stdin", async () => {
+    const content = Buffer.from("hello");
+    mockFs.createReadStream.mockReturnValueOnce(makeReadStream(content) as any);
+    const proc = fakeSpawnOk();
+    await (svc as any).writeFileToContainer("mybc", "C:\\host\\f.txt", "C:\\run\\f.txt");
+    // Decode all base64 lines (each chunk is a multiple of 3 raw bytes so
+    // only the final chunk carries '=' padding — safe to concatenate).
+    const allLines: string = proc.stdin.write.mock.calls
+      .map((c: any[]) => (c[0] as string).replace(/\n$/, ""))
+      .join("");
+    expect(Buffer.from(allLines, "base64")).toEqual(content);
+    // Each write ends with a newline
+    const lastWrite: string = proc.stdin.write.mock.calls.at(-1)[0];
+    expect(lastWrite).toMatch(/\n$/);
+  });
+
+  it("completes without writing data for an empty file", async () => {
+    mockFs.createReadStream.mockReturnValueOnce(makeReadStream(Buffer.alloc(0)) as any);
+    const proc = fakeSpawnOk();
+    await (svc as any).writeFileToContainer("mybc", "C:\\host\\empty.txt", "C:\\run\\empty.txt");
+    // No base64 lines, only stdin.end() called
+    expect(proc.stdin.end).toHaveBeenCalled();
+    const written: string = proc.stdin.write.mock.calls.map((c: any[]) => c[0]).join("");
+    expect(written).toBe("");
+  });
+
+  it("escapes single quotes in the container path", async () => {
+    mockFs.createReadStream.mockReturnValueOnce(makeReadStream(Buffer.from("x")) as any);
+    fakeSpawnOk();
+    await (svc as any).writeFileToContainer("mybc", "C:\\host\\f.txt", "C:\\path with 'quotes'\\f.txt");
+    const args: string[] = mockSpawn.mock.calls[0][1];
+    expect(args.join(" ")).toContain("''quotes''");
+  });
+
+  it("rejects when the container process exits with a non-zero code", async () => {
+    mockFs.createReadStream.mockReturnValueOnce(makeReadStream(Buffer.from("data")) as any);
+    fakeSpawnFail("access denied");
+    await expect(
+      (svc as any).writeFileToContainer("mybc", "C:\\host\\f.txt", "C:\\run\\f.txt"),
+    ).rejects.toThrow("access denied");
   });
 });
 
-describe("copyFromContainer", () => {
-  it("runs docker cp from container to host", async () => {
-    fakeExecOk("");
-    await (svc as any).copyFromContainer("mybc", "C:\\temp\\backup.bak", "D:\\backups\\backup.bak");
-    expect(mockExec.mock.calls[0][0]).toBe(
-      'docker cp mybc:C:\\temp\\backup.bak "D:\\backups\\backup.bak"',
+// ─── readFileFromContainer (private) ─────────────────────────────
+
+describe("readFileFromContainer", () => {
+  it("decodes base64 stdout and writes raw bytes to the host file", async () => {
+    const content = Buffer.from("recovered data");
+    const ws = makeWriteStream();
+    mockFs.createWriteStream.mockReturnValueOnce(ws as any);
+    fakeSpawnOk(content.toString("base64"));
+    await (svc as any).readFileFromContainer("mybc", "C:\\run\\out.bak", "D:\\local\\out.bak");
+    const written: Buffer = Buffer.concat(
+      ws.write.mock.calls.map((c: any[]) => c[0] as Buffer),
     );
+    expect(written.toString()).toBe("recovered data");
+  });
+
+  it("streams large files without loading all into memory", async () => {
+    const chunk1 = Buffer.alloc(49_152, 0x01); // 48 KB — no padding
+    const chunk2 = Buffer.alloc(100, 0x02);    // leftover — padded
+    const b64 = Buffer.concat([chunk1, chunk2]).toString("base64");
+    const ws = makeWriteStream();
+    mockFs.createWriteStream.mockReturnValueOnce(ws as any);
+    fakeSpawnOk(b64);
+    await (svc as any).readFileFromContainer("mybc", "C:\\run\\big.bak", "D:\\big.bak");
+    const written = Buffer.concat(ws.write.mock.calls.map((c: any[]) => c[0] as Buffer));
+    expect(written.length).toBe(49_252);
+    expect(written[0]).toBe(0x01);
+    expect(written[49_152]).toBe(0x02);
+  });
+
+  it("rejects and cleans up the partial file when the process fails", async () => {
+    const ws = makeWriteStream();
+    mockFs.createWriteStream.mockReturnValueOnce(ws as any);
+    fakeSpawnFail("file not found");
+    await expect(
+      (svc as any).readFileFromContainer("mybc", "C:\\run\\missing.bak", "D:\\missing.bak"),
+    ).rejects.toThrow("file not found");
+    expect(ws.destroy).toHaveBeenCalled();
   });
 });
 
@@ -588,6 +774,70 @@ describe("deleteProfile", () => {
 
     await svc.deleteProfile();
     expect(mockFs.writeFileSync).not.toHaveBeenCalled();
+  });
+});
+
+// ─── backupDatabase edition detection ────────────────────────────
+
+describe("backupDatabase edition detection", () => {
+  beforeEach(() => {
+    (vscode.window.showSaveDialog as jest.Mock).mockResolvedValue(
+      vscode.Uri.file("C:\\backups\\mybc_backup.bak"),
+    );
+  });
+
+  it("uses WITH FORMAT COMPRESSION on non-Express editions", async () => {
+    fakeExecOk(JSON.stringify({ ServerInstance: "BC", DatabaseName: "MyDB" })); // getContainerInfo
+    fakeExecOk("3\n"); // EngineEdition = 3 (Enterprise)
+    fakeExecOk("");    // New-Item temp dir
+    fakeExecOk("");    // BACKUP DATABASE
+    const ws = makeWriteStream();
+    mockFs.createWriteStream.mockReturnValueOnce(ws as any);
+    fakeSpawnOk(""); // readFileFromContainer
+    fakeExecOk(""); // cleanup
+
+    await svc.backupDatabase("mybc");
+
+    const calls: string[] = mockExec.mock.calls.map((c: any[]) => c[0] as string);
+    const backupCall = calls.find(c => c.includes("BACKUP DATABASE"));
+    expect(backupCall).toBeDefined();
+    expect(backupCall).toContain("WITH FORMAT, COMPRESSION");
+  });
+
+  it("uses WITH FORMAT only on SQL Server Express (EngineEdition 4)", async () => {
+    fakeExecOk(JSON.stringify({ ServerInstance: "BC", DatabaseName: "MyDB" })); // getContainerInfo
+    fakeExecOk("4\n"); // EngineEdition = 4 (Express)
+    fakeExecOk("");    // New-Item temp dir
+    fakeExecOk("");    // BACKUP DATABASE
+    const ws = makeWriteStream();
+    mockFs.createWriteStream.mockReturnValueOnce(ws as any);
+    fakeSpawnOk(""); // readFileFromContainer
+    fakeExecOk(""); // cleanup
+
+    await svc.backupDatabase("mybc");
+
+    const calls: string[] = mockExec.mock.calls.map((c: any[]) => c[0] as string);
+    const backupCall = calls.find(c => c.includes("BACKUP DATABASE"));
+    expect(backupCall).toBeDefined();
+    expect(backupCall).not.toContain("COMPRESSION");
+  });
+
+  it("defaults to WITH FORMAT COMPRESSION when edition check fails", async () => {
+    fakeExecOk(JSON.stringify({ ServerInstance: "BC", DatabaseName: "MyDB" })); // getContainerInfo
+    fakeExecFail("cmdlet not found"); // edition check fails
+    fakeExecOk("");    // New-Item temp dir
+    fakeExecOk("");    // BACKUP DATABASE
+    const ws = makeWriteStream();
+    mockFs.createWriteStream.mockReturnValueOnce(ws as any);
+    fakeSpawnOk(""); // readFileFromContainer
+    fakeExecOk(""); // cleanup
+
+    await svc.backupDatabase("mybc");
+
+    const calls: string[] = mockExec.mock.calls.map((c: any[]) => c[0] as string);
+    const backupCall = calls.find(c => c.includes("BACKUP DATABASE"));
+    expect(backupCall).toBeDefined();
+    expect(backupCall).toContain("WITH FORMAT, COMPRESSION");
   });
 });
 

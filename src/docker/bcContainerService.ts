@@ -1,4 +1,4 @@
-import { exec } from "child_process";
+import { exec, spawn } from "child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -13,6 +13,18 @@ const BC_SERVER_INSTANCE = "BC";
 const CONTAINER_TEMP = "C:\\run\\my";
 
 /**
+ * Chunk size for streaming file transfers between host and container.
+ * 49 152 bytes = 48 KB = 16 384 × 3, so every full chunk base64-encodes
+ * with zero padding characters. Only the final (possibly smaller) chunk
+ * may carry '=' padding. This lets the container and host decode each
+ * chunk independently without boundary ambiguity.
+ */
+const FILE_TRANSFER_CHUNK = 49_152;
+
+/** Maximum wall-clock time for a single file transfer (30 minutes). */
+const FILE_TRANSFER_TIMEOUT_MS = 1_800_000;
+
+/**
  * Import the NAV/BC management module inside the container.
  * Required because we use `-NoProfile` to avoid slow profile loading
  * and unpredictable stdout. Covers both legacy NAV and modern BC paths.
@@ -25,7 +37,8 @@ const NAV_MODULE_IMPORT =
 
 /**
  * BC-specific operations that run inside a Business Central container
- * via `docker exec` + PowerShell cmdlets or `docker cp`.
+ * via `docker exec` + PowerShell cmdlets. All file transfers use chunked
+ * Base64 over docker exec to support both Process and Hyper-V isolation.
  *
  * This keeps dockerService.ts focused on generic Docker operations.
  */
@@ -38,11 +51,37 @@ export class BcContainerService {
 
   // ── shell helper ─────────────────────────────────────────────
 
+  /**
+   * Strip ANSI escape sequences and reduce a multi-line PowerShell error to
+   * the single most relevant message. PowerShell writes the actual error value
+   * on a line formatted as "     | Error text here"; this extracts that line
+   * and prepends the cmdlet name from the first line.
+   *
+   * Falls back to the first non-empty line when no structured PS format is found.
+   */
+  private static cleanPsError(raw: string): string {
+    // eslint-disable-next-line no-control-regex
+    const clean = raw.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "").trim();
+    if (!clean) { return ""; }
+
+    const lines = clean.split(/\r?\n/);
+    // PowerShell puts the actual error value on lines like "     | Your message."
+    // Lines with only tildes ("     |     ~~~~~") are underlines — skip them.
+    const valueLine = lines.find(l => /^\s*\|\s+[^~\s]/.test(l));
+    if (valueLine) {
+      const msg = valueLine.replace(/^\s*\|\s+/, "").trim();
+      const cmdlet = lines[0].split(/\s*:\s*/)[0].trim();
+      return cmdlet ? `${cmdlet}: ${msg}` : msg;
+    }
+
+    return lines.find(l => l.trim())?.trim() ?? clean;
+  }
+
   private exec(command: string, timeoutMs = EXEC_TIMEOUT_MS): Promise<string> {
     return new Promise((resolve, reject) => {
       exec(command, { timeout: timeoutMs, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
         if (err) {
-          reject(new Error(stderr?.trim() || err.message));
+          reject(new Error(BcContainerService.cleanPsError(stderr) || err.message));
           return;
         }
         resolve(stdout);
@@ -76,22 +115,221 @@ export class BcContainerService {
     );
   }
 
-  /** Copy a file from host into a container. */
-  private async copyToContainer(
-    containerName: string,
-    hostPath: string,
-    containerPath: string,
-  ): Promise<void> {
-    await this.exec(`docker cp "${hostPath}" ${containerName}:${containerPath}`);
+  /** Escape single quotes in a path for use inside a PowerShell single-quoted string. */
+  private static escapePsPath(p: string): string {
+    return p.replace(/'/g, "''");
   }
 
-  /** Copy a file from a container to host. */
-  private async copyFromContainer(
+  /**
+   * Write a host file into a container by streaming base64-encoded lines
+   * through a single `docker exec -i` stdin pipe.
+   *
+   * A single spawn replaces N sequential exec calls, eliminating per-chunk
+   * PowerShell process startup overhead (~400 ms each).
+   *
+   * Protocol: the host reads the file in FILE_TRANSFER_CHUNK-byte slices
+   * (multiple of 3 bytes so each slice produces clean base64 without '='
+   * padding). Each slice is written as a base64 line to stdin. The container
+   * PowerShell reads each line, decodes it, and appends the raw bytes to the
+   * target file. EOF (stdin close) signals the container to flush and exit.
+   *
+   * Backpressure: if proc.stdin signals full, the host read stream is paused
+   * until the drain event fires, preventing unbounded memory growth.
+   */
+  private writeFileToContainer(
+    containerName: string,
+    hostPath: string,
+    containerPath: string,
+    timeoutMs = FILE_TRANSFER_TIMEOUT_MS,
+  ): Promise<void> {
+    const ep = BcContainerService.escapePsPath(containerPath);
+    const psCmd =
+      `$s=[IO.File]::Create('${ep}');` +
+      `while(($l=[Console]::In.ReadLine()) -ne $null){` +
+      `$t=$l.Trim();if($t.Length -gt 0){$b=[Convert]::FromBase64String($t);$s.Write($b,0,$b.Length)}};` +
+      `$s.Dispose()`;
+
+    return new Promise<void>((resolve, reject) => {
+      const proc = spawn("docker", ["exec", "-i", containerName, "powershell", "-NoProfile", "-Command", psCmd]);
+      let stderr = "";
+      let settled = false;
+
+      const fail = (err: Error) => {
+        if (settled) { return; }
+        settled = true;
+        proc.kill();
+        reject(err);
+      };
+
+      const timer = setTimeout(
+        () => fail(new Error("File transfer timed out")),
+        timeoutMs,
+      );
+
+      proc.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
+      proc.on("error", (err: Error) => { clearTimeout(timer); fail(err); });
+      proc.on("close", (code: number | null) => {
+        clearTimeout(timer);
+        if (settled) { return; }
+        settled = true;
+        if (code !== 0) {
+          reject(new Error(BcContainerService.cleanPsError(stderr) || `Transfer process exited with code ${code}`));
+        } else {
+          resolve();
+        }
+      });
+
+      const readStream = fs.createReadStream(hostPath, { highWaterMark: FILE_TRANSFER_CHUNK });
+      let pending: Buffer<ArrayBuffer> = Buffer.alloc(0);
+
+      readStream.on("data", (chunk: string | Buffer<ArrayBufferLike>) => {
+        const raw: Buffer<ArrayBuffer> = Buffer.isBuffer(chunk) ? Buffer.from(chunk) : Buffer.from(chunk as string);
+        const buf = pending.length ? Buffer.concat([pending, raw]) : raw;
+        const usable = buf.length - (buf.length % 3);
+        if (usable > 0) {
+          const canContinue = proc.stdin.write(buf.slice(0, usable).toString("base64") + "\n");
+          pending = buf.slice(usable) as Buffer<ArrayBuffer>;
+          if (!canContinue) {
+            readStream.pause();
+            proc.stdin.once("drain", () => readStream.resume());
+          }
+        } else {
+          pending = buf as Buffer<ArrayBuffer>;
+        }
+      });
+
+      readStream.on("end", () => {
+        if (pending.length > 0) {
+          proc.stdin.write(pending.toString("base64") + "\n");
+        }
+        proc.stdin.end();
+      });
+
+      readStream.on("error", (err: Error) => { clearTimeout(timer); fail(err); });
+    });
+  }
+
+  /**
+   * Read a file from a container to the host by streaming base64-encoded
+   * bytes through a single `docker exec` stdout pipe.
+   *
+   * A single spawn replaces N sequential exec calls, eliminating per-chunk
+   * PowerShell process startup overhead and the 10 MB exec maxBuffer limit.
+   *
+   * Protocol: the container PowerShell opens the file and reads it in
+   * FILE_TRANSFER_CHUNK-byte slices (multiple of 3 so all but the final
+   * slice produce clean, padding-free base64). Each slice is written to
+   * stdout via [Console]::Write() to bypass the PowerShell pipeline. The
+   * host decodes base64 quanta (groups of 4 chars = 3 raw bytes) on the fly
+   * and writes them directly to a write stream, keeping host memory usage
+   * proportional to the chunk size rather than the file size.
+   *
+   * Backpressure: if the write stream signals full, proc.stdout is paused
+   * until drain fires.
+   */
+  private readFileFromContainer(
     containerName: string,
     containerPath: string,
     hostPath: string,
+    timeoutMs = FILE_TRANSFER_TIMEOUT_MS,
   ): Promise<void> {
-    await this.exec(`docker cp ${containerName}:${containerPath} "${hostPath}"`);
+    const ep = BcContainerService.escapePsPath(containerPath);
+    const psCmd =
+      `$f=[IO.File]::OpenRead('${ep}');` +
+      `$b=New-Object byte[] ${FILE_TRANSFER_CHUNK};` +
+      `while(($r=$f.Read($b,0,${FILE_TRANSFER_CHUNK}))-gt 0){[Console]::Write([Convert]::ToBase64String($b,0,$r))};` +
+      `$f.Close()`;
+
+    return new Promise<void>((resolve, reject) => {
+      const proc = spawn("docker", ["exec", containerName, "powershell", "-NoProfile", "-Command", psCmd]);
+      const writeStream = fs.createWriteStream(hostPath);
+      let b64Buf = "";
+      let stderr = "";
+      let settled = false;
+
+      const fail = (err: Error) => {
+        if (settled) { return; }
+        settled = true;
+        writeStream.destroy();
+        try { fs.unlinkSync(hostPath); } catch { /* ignore */ }
+        reject(err);
+      };
+
+      const timer = setTimeout(() => { proc.kill(); fail(new Error("File transfer timed out")); }, timeoutMs);
+
+      writeStream.on("error", (err: Error) => { clearTimeout(timer); proc.kill(); fail(err); });
+      proc.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
+
+      proc.stdout.on("data", (chunk: Buffer) => {
+        b64Buf += chunk.toString("ascii");
+        const usable = b64Buf.length - (b64Buf.length % 4);
+        if (usable >= 4) {
+          const decoded = Buffer.from(b64Buf.slice(0, usable), "base64");
+          b64Buf = b64Buf.slice(usable);
+          const canContinue = writeStream.write(decoded);
+          if (!canContinue) {
+            proc.stdout.pause();
+            writeStream.once("drain", () => proc.stdout.resume());
+          }
+        }
+      });
+
+      proc.on("error", (err: Error) => { clearTimeout(timer); fail(err); });
+      proc.on("close", (code: number | null) => {
+        clearTimeout(timer);
+        if (settled) { return; }
+        if (code !== 0) {
+          fail(new Error(BcContainerService.cleanPsError(stderr) || `Transfer process exited with code ${code}`));
+          return;
+        }
+        if (b64Buf.length > 0) {
+          writeStream.write(Buffer.from(b64Buf, "base64"));
+          b64Buf = "";
+        }
+        writeStream.end(() => {
+          settled = true;
+          resolve();
+        });
+      });
+    });
+  }
+
+  /**
+   * Copy a host directory into a container using a zip transfer via docker exec.
+   * Compresses the directory on the host, transfers the zip in Base64 chunks,
+   * and expands it inside the container. Works with Hyper-V containers.
+   */
+  private async writeDirToContainer(
+    containerName: string,
+    hostDir: string,
+    containerDir: string,
+  ): Promise<void> {
+    const zipPath = path.join(os.tmpdir(), `bcm_${Date.now()}.zip`);
+    const eZip = BcContainerService.escapePsPath(zipPath);
+    const eHostDir = BcContainerService.escapePsPath(hostDir);
+    const eContainerDir = BcContainerService.escapePsPath(containerDir);
+    const containerZip = `${containerDir}.zip`;
+    const eContainerZip = BcContainerService.escapePsPath(containerZip);
+
+    try {
+      await this.exec(
+        `powershell -NoProfile -Command "Compress-Archive -Path '${eHostDir}\\*' -DestinationPath '${eZip}' -Force"`,
+        60_000,
+      );
+      await this.execInContainer(
+        containerName,
+        `New-Item -Path '${eContainerDir}' -ItemType Directory -Force | Out-Null`,
+        15_000,
+      );
+      await this.writeFileToContainer(containerName, zipPath, containerZip);
+      await this.execInContainer(
+        containerName,
+        `Expand-Archive -Path '${eContainerZip}' -DestinationPath '${eContainerDir}' -Force; Remove-Item '${eContainerZip}' -Force -ErrorAction SilentlyContinue`,
+        120_000,
+      );
+    } finally {
+      fs.rmSync(zipPath, { force: true });
+    }
   }
 
   // ── v1.1: Copy Container IP ──────────────────────────────────
@@ -136,8 +374,8 @@ export class BcContainerService {
         ]);
 
         // Step 2: Copy .app file into container
-        progress.report({ message: "Copying app to container…" });
-        await this.copyToContainer(containerName, hostPath, containerPath);
+        progress.report({ message: "Copying app to container..." });
+        await this.writeFileToContainer(containerName, hostPath, containerPath);
 
         // Step 3: Publish the app
         progress.report({ message: "Publishing app…" });
@@ -217,12 +455,12 @@ export class BcContainerService {
     await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: "Importing license…" },
       async (progress) => {
-        progress.report({ message: "Copying license to container…" });
+        progress.report({ message: "Copying license to container..." });
         await this.execInContainer(
           containerName,
           `if (!(Test-Path '${CONTAINER_TEMP}')) { New-Item -Path '${CONTAINER_TEMP}' -ItemType Directory -Force | Out-Null }`,
         );
-        await this.copyToContainer(containerName, hostPath, containerPath);
+        await this.writeFileToContainer(containerName, hostPath, containerPath);
 
         const serverInstance = await this.getServerInstance(containerName);
 
@@ -353,19 +591,32 @@ export class BcContainerService {
       { location: vscode.ProgressLocation.Notification, title: "Backing up database…" },
       async (progress) => {
         progress.report({ message: "Creating backup inside container…" });
-        const { serverInstance, dbName } = await this.getContainerInfo(containerName);
+        const { dbName } = await this.getContainerInfo(containerName);
+
+        // Detect SQL Server Express (EngineEdition = 4) and create temp dir in parallel.
+        // Express does not support BACKUP WITH COMPRESSION; all other editions do.
+        const [editionRaw] = await Promise.all([
+          this.execInContainer(
+            containerName,
+            `(Invoke-Sqlcmd -Query "SELECT SERVERPROPERTY('EngineEdition') AS e").e`,
+            15_000,
+          ).catch(() => ""),
+          this.execInContainer(
+            containerName,
+            `New-Item -Path 'C:\\temp' -ItemType Directory -Force -ErrorAction SilentlyContinue | Out-Null`,
+            15_000,
+          ).catch(() => {}),
+        ]);
+        const bakOptions = editionRaw.trim() === "4" ? "WITH FORMAT" : "WITH FORMAT, COMPRESSION";
 
         await this.execInContainer(
           containerName,
-          [
-            `New-Item -Path 'C:\\temp' -ItemType Directory -Force -ErrorAction SilentlyContinue | Out-Null;`,
-            `Invoke-Sqlcmd -Query "BACKUP DATABASE [${dbName}] TO DISK='${containerBakPath}' WITH FORMAT, COMPRESSION"`,
-          ].join(" "),
+          `Invoke-Sqlcmd -Query "BACKUP DATABASE [${dbName}] TO DISK='${containerBakPath}' ${bakOptions}"`,
           600_000, // 10 min timeout for large DBs
         );
 
-        progress.report({ message: "Copying backup to host…" });
-        await this.copyFromContainer(containerName, containerBakPath, saveUri.fsPath);
+        progress.report({ message: "Copying backup to host..." });
+        await this.readFileFromContainer(containerName, containerBakPath, saveUri.fsPath);
 
         // Cleanup inside container
         await this.execInContainer(
@@ -410,8 +661,8 @@ export class BcContainerService {
           ),
         ]);
 
-        progress.report({ message: "Copying backup to container…" });
-        await this.copyToContainer(containerName, hostPath, containerBakPath);
+        progress.report({ message: "Copying backup to container..." });
+        await this.writeFileToContainer(containerName, hostPath, containerBakPath);
 
         progress.report({ message: "Stopping service tier…" });
         await this.execNavInContainer(
@@ -818,9 +1069,9 @@ export class BcContainerService {
         }
 
         // Copy workspace to container
-        progress.report({ message: "Copying project to container…" });
+        progress.report({ message: "Copying project to container..." });
         const containerProjectPath = `C:\\temp\\alproject_${Date.now()}`;
-        await this.exec(`docker cp "${targetFolder.uri.fsPath}" ${containerName}:${containerProjectPath}`);
+        await this.writeDirToContainer(containerName, targetFolder.uri.fsPath, containerProjectPath);
 
         // Find symbol files
         const symbolPath = await this.execInContainer(
@@ -850,9 +1101,9 @@ export class BcContainerService {
 
         if (outputExists.trim().toLowerCase() === "true") {
           // Copy back to host
-          progress.report({ message: "Copying compiled app to host…" });
+          progress.report({ message: "Copying compiled app to host..." });
           const outputPath = path.join(targetFolder.uri.fsPath, "output.app");
-          await this.copyFromContainer(containerName, `${containerProjectPath}\\output.app`, outputPath);
+          await this.readFileFromContainer(containerName, `${containerProjectPath}\\output.app`, outputPath);
           vscode.window.showInformationMessage(`Compiled app saved to ${outputPath}`);
         } else {
           vscode.window.showWarningMessage("Compilation completed with errors. Check the output channel.");
