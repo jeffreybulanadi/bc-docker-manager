@@ -15,6 +15,7 @@ import { VolumeTreeItem } from "./tree/volumeProvider";
 import { ArtifactsLauncherProvider } from "./tree/artifactsLauncherProvider";
 import { initTelemetry, disposeTelemetry, sendEvent, sendError } from "./services/telemetry";
 import { ContainerAnnotationService } from "./services/containerAnnotationService";
+import { ReleaseNotesPanel } from "./webview/releaseNotesPanel";
 
 /**
  * Extension entry point.
@@ -112,6 +113,15 @@ export async function activate(
     context.globalState.update("bcDockerManager.hasAutoOpened", true);
     RegistryPanel.show(artifacts, docker, containerProvider, context.extensionUri);
   }
+
+  // Show What's New panel when the extension version changes.
+  ReleaseNotesPanel.showIfUpdated(context);
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("bcDockerManager.showReleaseNotes", () => {
+      ReleaseNotesPanel.show();
+    })
+  );
 
   // Diagnostic: test CDN connectivity from inside the extension host
   context.subscriptions.push(

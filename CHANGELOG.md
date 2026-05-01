@@ -17,6 +17,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 - Clear Container Note and Tags command. Removes all annotations from a container in one step.
 
+- What's New panel. Opens automatically the first time VS Code starts after a new version is installed, showing a summary of changes for that version. The panel can be reopened any time via **BC Docker Manager: What's New** in the Command Palette. Set `bcDockerManager.showReleaseNotesOnUpdate` to `false` to disable the automatic opening.
+
 ### Changed
 
 - Container export no longer fails when the container name contains uppercase letters. Docker requires image repository names to be entirely lowercase. The temporary image tag created during export is now sanitized to lowercase with any non-alphanumeric characters replaced by hyphens before being passed to `docker commit` and `docker save`.

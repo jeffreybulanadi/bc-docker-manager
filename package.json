@@ -150,6 +150,11 @@
             "onprem"
           ],
           "description": "Default artifact type when browsing."
+        },
+        "bcDockerManager.showReleaseNotesOnUpdate": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the What's New panel automatically when a new version of BC Docker Manager is installed."
         }
       }
     },
@@ -469,6 +474,12 @@
         "command": "bcDockerManager.clearContainerAnnotations",
         "title": "Clear Container Note and Tags",
         "icon": "$(close)",
+        "category": "BC Docker Manager"
+      },
+      {
+        "command": "bcDockerManager.showReleaseNotes",
+        "title": "What's New",
+        "icon": "$(bookmark)",
         "category": "BC Docker Manager"
       }
     ],
