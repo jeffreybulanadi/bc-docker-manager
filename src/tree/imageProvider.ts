@@ -1,6 +1,7 @@
-﻿import * as vscode from "vscode";
+import * as vscode from "vscode";
 import { DockerService } from "../docker/dockerService";
 import { ImageTreeItem } from "./models";
+import { debounce } from "../util/debounce";
 
 /**
  * Provides image data for the "Images" tree view.
@@ -17,7 +18,16 @@ export class ImageProvider
 
   private _bcFilterEnabled = true;
 
+  private readonly _debouncedFire = debounce(() => {
+    this._onDidChangeTreeData.fire();
+  }, 150);
+
   constructor(private readonly docker: DockerService) {}
+
+  dispose(): void {
+    this._debouncedFire.cancel();
+    this._onDidChangeTreeData.dispose();
+  }
 
   getTreeItem(element: ImageTreeItem): vscode.TreeItem {
     return element;
@@ -37,7 +47,7 @@ export class ImageProvider
   }
 
   refresh(): void {
-    this._onDidChangeTreeData.fire();
+    this._debouncedFire();
   }
 
   toggleBcFilter(): void {

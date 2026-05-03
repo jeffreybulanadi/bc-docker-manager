@@ -7,6 +7,16 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.5.1] - 2026-05-03
+
+### Changed
+
+- Renamed the "What's New" command to "Show Release Notes" in the Command Palette for clarity. The setting description is updated to match.
+
+- Enhanced internal architecture: retry with exponential backoff and full jitter on all Docker CLI calls, process lifecycle tracking to prevent leaked processes on deactivate, structured output channel logger with level filtering and automatic telemetry forwarding, centralized configuration service, debounced tree view refresh, and fixed a stale-inflight-entry bug in the SWR cache.
+
+---
+
 ## [1.5.0] - 2026-05-01
 
 ### Highlights
@@ -14,7 +24,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - **Set Container Tags and Notes:** Attach tags and a free-text note to any container for at-a-glance organisation directly in the Containers panel.
 - **Smarter container diagnostics:** When a container stops before BC is ready, the last 50 log lines appear immediately so you can see exactly what went wrong.
 - **Safer container naming:** Uppercase letters are blocked at creation time to prevent DNS and SSL failures.
-- **What's New panel:** Release notes open automatically after each update. You can opt out via settings.
+- **Release notes panel:** Release notes open automatically after each update. You can opt out via settings.
 
 ### Added
 
@@ -26,7 +36,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 - Clear Container Note and Tags command. Removes all annotations from a container in one step.
 
-- What's New panel. Opens automatically the first time VS Code starts after a new version is installed, showing a summary of changes for that version. The panel can be reopened any time via **BC Docker Manager: What's New** in the Command Palette. Set `bcDockerManager.showReleaseNotesOnUpdate` to `false` to disable the automatic opening.
+- Release notes panel. Opens automatically the first time VS Code starts after a new version is installed, showing a summary of changes for that version. The panel can be reopened any time via **BC Docker Manager: Show Release Notes** in the Command Palette. Set `bcDockerManager.showReleaseNotesOnUpdate` to `false` to disable the automatic opening.
 
 ### Changed
 
