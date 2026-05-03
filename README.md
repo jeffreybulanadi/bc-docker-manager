@@ -430,7 +430,7 @@ All commands are available from the Command Palette (`Ctrl+Shift+P`) under the *
 
 | Command | Description |
 |---------|-------------|
-| What's New | Open the release notes panel for the current version |
+| Show Release Notes | Open the release notes panel for the current version |
 
 ### Volumes
 
@@ -463,7 +463,7 @@ Configure defaults under **Settings > Extensions > BC Docker Manager**:
 | `bcDockerManager.defaultCountry` | `us` | Default country for artifact browsing (e.g. `us`, `w1`, `de`, `fr`) |
 | `bcDockerManager.defaultDns` | `8.8.8.8` | DNS server for containers |
 | `bcDockerManager.defaultArtifactType` | `sandbox` | Default artifact tab: `sandbox` or `onprem` |
-| `bcDockerManager.showReleaseNotesOnUpdate` | `true` | Show the What's New panel automatically when a new version is installed |
+| `bcDockerManager.showReleaseNotesOnUpdate` | `true` | Show the release notes panel automatically when a new version is installed |
 
 ---
 
