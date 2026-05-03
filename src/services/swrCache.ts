@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Stale-While-Revalidate (SWR) cache.
  *
  * `get()` returns cached data instantly, then fetches fresh data in the
@@ -6,12 +6,12 @@
  * copy, an optional `onUpdate` callback fires so callers (e.g. tree
  * providers) can refresh.
  *
- * This eliminates UI wait times - users always see *something* while
+ * This eliminates UI wait times - users always see something while
  * the real data loads behind the scenes.
  */
 export class SWRCache<T> {
-  private _data = new Map<string, { value: T; ts: number }>();
-  private _inflight = new Map<string, Promise<T>>();
+  private readonly _data = new Map<string, { value: T; ts: number }>();
+  private readonly _inflight = new Map<string, Promise<T>>();
 
   /**
    * @param staleTtlMs  How long data is considered fresh (default 10 s).
@@ -28,14 +28,18 @@ export class SWRCache<T> {
    *
    * @param key     Cache key (e.g. "containers", "images").
    * @param fetcher Async function that produces a fresh value.
-   * @returns       The cached (possibly stale) value, or a fresh fetch
-   *                if nothing was cached yet.
+   * @returns       The cached (possibly stale) value, or the result of the
+   *                first fetch if nothing was cached yet.
    */
   async get(key: string, fetcher: () => Promise<T>): Promise<T> {
     const entry = this._data.get(key);
     const age = entry ? Date.now() - entry.ts : Infinity;
 
-    if (entry && age < this.staleTtlMs) {
+    // Add TTL jitter (+/- 10%) to spread out concurrent expirations.
+    const jitter = this.staleTtlMs * 0.1 * (Math.random() * 2 - 1);
+    const effectiveTtl = this.staleTtlMs + jitter;
+
+    if (entry && age < effectiveTtl) {
       // Fresh - return as-is, no revalidation needed.
       return entry.value;
     }
@@ -75,7 +79,9 @@ export class SWRCache<T> {
       .catch(() => {
         this._inflight.delete(key);
         // Keep stale data on error - better than nothing.
-        return this._data.get(key)?.value as T;
+        const stale = this._data.get(key);
+        if (stale) { return stale.value; }
+        throw new Error(`SWRCache: revalidation failed for key "${key}" with no stale data`);
       });
     this._inflight.set(key, p);
   }
@@ -90,11 +96,16 @@ export class SWRCache<T> {
     if (existing) {
       return existing;
     }
-    const p = fetcher().then((value) => {
-      this._data.set(key, { value, ts: Date.now() });
-      this._inflight.delete(key);
-      return value;
-    });
+    const p = fetcher()
+      .then((value) => {
+        this._data.set(key, { value, ts: Date.now() });
+        this._inflight.delete(key);
+        return value;
+      })
+      .catch((err: unknown) => {
+        this._inflight.delete(key);
+        throw err;
+      });
     this._inflight.set(key, p);
     return p;
   }

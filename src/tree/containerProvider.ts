@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { DockerService } from "../docker/dockerService";
 import { ContainerTreeItem, InitializingContainerTreeItem } from "./models";
 import { ContainerAnnotationService } from "../services/containerAnnotationService";
+import { debounce } from "../util/debounce";
 
 /**
  * Provides container data for the "Containers" tree view.
@@ -26,10 +27,19 @@ export class ContainerProvider
   /** name (without leading slash) -> current phase label */
   private readonly _initializingContainers = new Map<string, string>();
 
+  private readonly _debouncedFire = debounce(() => {
+    this._onDidChangeTreeData.fire();
+  }, 150);
+
   constructor(
     private readonly docker: DockerService,
     private readonly annotations?: ContainerAnnotationService
   ) {}
+
+  dispose(): void {
+    this._debouncedFire.cancel();
+    this._onDidChangeTreeData.dispose();
+  }
 
   getTreeItem(element: ContainerTreeItem | InitializingContainerTreeItem): vscode.TreeItem {
     return element;
@@ -77,7 +87,7 @@ export class ContainerProvider
   }
 
   refresh(): void {
-    this._onDidChangeTreeData.fire();
+    this._debouncedFire();
   }
 
   toggleBcFilter(): void {

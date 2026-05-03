@@ -1,9 +1,10 @@
-﻿import { exec, spawn } from "child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 import { SWRCache } from "../services/swrCache";
+import { ProcessManager } from "../util/processManager";
+import { withRetry, isTransientDockerError } from "../util/retry";
 
 // ────────────────────────── Interfaces ──────────────────────────
 
@@ -84,6 +85,7 @@ export class DockerService implements vscode.Disposable {
 
   private readonly _containerCache: SWRCache<DockerContainer[]>;
   private readonly _imageCache: SWRCache<DockerImage[]>;
+  private readonly _processManager = new ProcessManager();
 
   constructor() {
     const notify = () => this._onDidUpdate.fire();
@@ -93,6 +95,7 @@ export class DockerService implements vscode.Disposable {
 
   dispose(): void {
     this._onDidUpdate.dispose();
+    this._processManager.dispose();
   }
 
   /** True if the last ensureNetworking() call actually ran a fix (UAC elevation). */
@@ -107,28 +110,20 @@ export class DockerService implements vscode.Disposable {
 
   // ── shell helper ─────────────────────────────────────────────
 
-  /** Run a command and resolve with its stdout (rejects on error). */
-  private exec(command: string, timeoutMs = EXEC_TIMEOUT_MS): Promise<string> {
-    return new Promise((resolve, reject) => {
-      exec(command, { timeout: timeoutMs }, (err, stdout, stderr) => {
-        if (err) {
-          reject(new Error(stderr?.trim() || err.message));
-          return;
-        }
-        resolve(stdout);
-      });
-    });
+  /** Run a docker command and resolve with its stdout (rejects on error). */
+  private _run(args: string[], timeoutMs = EXEC_TIMEOUT_MS): Promise<string> {
+    return this._processManager.exec("docker", args, { timeoutMs });
   }
 
   // ── health checks ───────────────────────────────────────────
 
   async isDockerInstalled(): Promise<boolean> {
-    try { await this.exec("docker --version"); return true; }
+    try { await this._run(["--version"]); return true; }
     catch { return false; }
   }
 
   async isDockerRunning(): Promise<boolean> {
-    try { await this.exec("docker info"); return true; }
+    try { await this._run(["info"]); return true; }
     catch { return false; }
   }
 
@@ -140,8 +135,9 @@ export class DockerService implements vscode.Disposable {
   }
 
   private async _fetchContainers(): Promise<DockerContainer[]> {
-    const raw = await this.exec(
-      'docker ps -a --no-trunc --format "{{json .}}"'
+    const raw = await withRetry(
+      () => this._run(["ps", "-a", "--no-trunc", "--format", "{{json .}}"]),
+      { retryable: isTransientDockerError },
     );
     const containers = this.parseLines(raw);
 
@@ -188,22 +184,22 @@ export class DockerService implements vscode.Disposable {
   }
 
   async startContainer(id: string): Promise<void> {
-    await this.exec(`docker start ${id}`);
+    await this._run(["start", id]);
     this.invalidateContainers();
   }
 
   async stopContainer(id: string): Promise<void> {
-    await this.exec(`docker stop ${id}`);
+    await this._run(["stop", id]);
     this.invalidateContainers();
   }
 
   async restartContainer(id: string): Promise<void> {
-    await this.exec(`docker restart ${id}`);
+    await this._run(["restart", id]);
     this.invalidateContainers();
   }
 
   async removeContainer(id: string): Promise<void> {
-    await this.exec(`docker rm -f ${id}`);
+    await this._run(["rm", "-f", id]);
     this.invalidateContainers();
   }
 
@@ -215,8 +211,9 @@ export class DockerService implements vscode.Disposable {
   }
 
   private async _fetchImages(): Promise<DockerImage[]> {
-    const raw = await this.exec(
-      'docker images --no-trunc --format "{{json .}}"'
+    const raw = await withRetry(
+      () => this._run(["images", "--no-trunc", "--format", "{{json .}}"]),
+      { retryable: isTransientDockerError },
     );
     return this.parseImageLines(raw);
   }
@@ -235,7 +232,7 @@ export class DockerService implements vscode.Disposable {
   }
 
   async removeImage(id: string): Promise<void> {
-    await this.exec(`docker rmi ${id}`);
+    await this._run(["rmi", id]);
     this.invalidateImages();
   }
 
@@ -244,8 +241,8 @@ export class DockerService implements vscode.Disposable {
    * @param ref Full image reference, e.g. "mcr.microsoft.com/businesscentral:ltsc2022"
    * @param dockerPath Path to docker executable (default: "docker")
    */
-  async pullImage(ref: string, dockerPath = "docker"): Promise<void> {
-    await this.exec(`"${dockerPath}" pull ${ref}`, 600_000);
+  async pullImage(ref: string, _dockerPath = "docker"): Promise<void> {
+    await this._run(["pull", ref], 600_000);
     this.invalidateImages();
   }
 
@@ -262,7 +259,7 @@ export class DockerService implements vscode.Disposable {
     progress?: vscode.Progress<{ message?: string; increment?: number }>,
   ): Promise<void> {
     return new Promise<void>((resolve, reject) => {
-      const child = spawn("docker", ["pull", ref]);
+      const child = this._processManager.spawn("docker", ["pull", ref]);
       const layers = new Map<string, { status: string; current: number; total: number }>();
       let lastPct = 0;
 
@@ -288,7 +285,7 @@ export class DockerService implements vscode.Disposable {
         }
       };
 
-      child.stdout.on("data", (data: Buffer) => {
+      child.stdout!.on("data", (data: Buffer) => {
         const text = data.toString();
         for (const line of text.split("\n")) {
           const trimmed = line.trim();
@@ -320,7 +317,7 @@ export class DockerService implements vscode.Disposable {
         }
       });
 
-      child.stderr.on("data", (data: Buffer) => {
+      child.stderr!.on("data", (data: Buffer) => {
         output.append(data.toString());
       });
 
@@ -362,9 +359,8 @@ export class DockerService implements vscode.Disposable {
   private async enrichWithLabels(
     containers: DockerContainer[]
   ): Promise<void> {
-    const ids = containers.map((c) => c.id).join(" ");
     try {
-      const raw = await this.exec(`docker inspect ${ids}`);
+      const raw = await this._run(["inspect", ...containers.map(c => c.id)]);
       const inspected = JSON.parse(raw) as InspectResult[];
       const labelMap = new Map<string, Record<string, string>>();
       for (const entry of inspected) {
@@ -485,7 +481,7 @@ export class DockerService implements vscode.Disposable {
    */
   async isWindowsContainerMode(): Promise<boolean> {
     try {
-      const raw = await this.exec('docker info --format "{{json .}}"', 10_000);
+      const raw = await this._run(["info", "--format", "{{json .}}"], 10_000);
       return (JSON.parse(raw).OSType || "").toLowerCase() === "windows";
     } catch { return false; }
   }
@@ -591,8 +587,8 @@ export class DockerService implements vscode.Disposable {
       // Check container state + health in one shot
       try {
         const fmt = '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}';
-        const raw = await this.exec(
-          `docker inspect -f "${fmt}" ${containerName}`,
+        const raw = await this._run(
+          ["inspect", "-f", fmt, containerName],
           10_000,
         );
         const [state, health] = raw.trim().split("|");
@@ -613,8 +609,8 @@ export class DockerService implements vscode.Disposable {
         // "no-healthcheck" = image has no HEALTHCHECK, fall back to log-based detection
         if (health === "no-healthcheck" && state === "running") {
           try {
-            const tailRaw = await this.exec(
-              `docker logs --tail 5 ${containerName}`,
+            const tailRaw = await this._run(
+              ["logs", "--tail", "5", containerName],
               5_000,
             );
             if (tailRaw.includes("Ready for connections!") || tailRaw.includes("Container setup complete")) {
@@ -630,8 +626,8 @@ export class DockerService implements vscode.Disposable {
 
       // Stream the latest log line to show progress
       try {
-        const logRaw = await this.exec(
-          `docker logs --tail 1 ${containerName}`,
+        const logRaw = await this._run(
+          ["logs", "--tail", "1", containerName],
           5_000,
         );
         const line = logRaw.trim();
@@ -656,8 +652,9 @@ export class DockerService implements vscode.Disposable {
   private async dumpContainerLogs(containerName: string, output?: vscode.OutputChannel): Promise<void> {
     if (!output) { return; }
     try {
-      // Merge stderr into stdout so container stderr (most BC log output) is captured.
-      const logs = await this.exec(`docker logs --tail 50 ${containerName} 2>&1`, 10_000);
+      // docker logs does not support 2>&1 in array-arg mode; stderr is separate.
+      // Capture stdout only - most BC logs go through Docker's json-file logging driver.
+      const logs = await this._run(["logs", "--tail", "50", containerName], 10_000);
       const trimmed = logs.trim();
       if (trimmed) {
         output.appendLine(`\n-- Last container logs --`);
@@ -739,9 +736,9 @@ export class DockerService implements vscode.Disposable {
     output: vscode.OutputChannel,
   ): Promise<number> {
     return new Promise((resolve) => {
-      const child = spawn("docker", ["exec", containerId, ...command]);
-      child.stdout.on("data", (d: Buffer) => output.append(d.toString()));
-      child.stderr.on("data", (d: Buffer) => output.append(d.toString()));
+      const child = this._processManager.spawn("docker", ["exec", containerId, ...command]);
+      child.stdout!.on("data", (d: Buffer) => output.append(d.toString()));
+      child.stderr!.on("data", (d: Buffer) => output.append(d.toString()));
       child.on("close", (code) => resolve(code ?? 1));
       child.on("error", () => resolve(1));
     });
@@ -762,8 +759,8 @@ export class DockerService implements vscode.Disposable {
   async getContainerIp(nameOrId: string): Promise<string | undefined> {
     for (const net of ["nat", "bridge"]) {
       try {
-        const raw = await this.exec(
-          `docker inspect -f "{{.NetworkSettings.Networks.${net}.IPAddress}}" ${nameOrId}`,
+        const raw = await this._run(
+          ["inspect", "-f", `{{.NetworkSettings.Networks.${net}.IPAddress}}`, nameOrId],
           10_000,
         );
         const ip = raw.trim();
@@ -775,8 +772,8 @@ export class DockerService implements vscode.Disposable {
 
     // Iterate every attached network and return the first valid IPv4.
     try {
-      const raw = await this.exec(
-        `docker inspect -f "{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}" ${nameOrId}`,
+      const raw = await this._run(
+        ["inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}", nameOrId],
         10_000,
       );
       return raw.trim().split(/\s+/).find(s => DockerService.IPV4_PATTERN.test(s));
@@ -817,11 +814,13 @@ export class DockerService implements vscode.Disposable {
    */
   async isCertInstalled(containerName: string): Promise<boolean> {
     try {
-      const raw = await this.exec(
-        `powershell -NoProfile -Command "` +
+      const psCmd =
         `(Get-ChildItem Cert:\\LocalMachine\\Root | ` +
-        `Where-Object { $_.Subject -eq 'CN=${containerName}' }).Count"`,
-        10_000,
+        `Where-Object { $_.Subject -eq 'CN=${containerName}' }).Count`;
+      const raw = await this._processManager.exec(
+        "powershell",
+        ["-NoProfile", "-Command", psCmd],
+        { timeoutMs: 10_000 },
       );
       return parseInt(raw.trim(), 10) > 0;
     } catch {
@@ -1023,40 +1022,39 @@ export class DockerService implements vscode.Disposable {
       `-ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','${scriptFile}'`;
 
     return new Promise<boolean>((resolve) => {
-      exec(
-        `powershell -NoProfile -Command "${elevateCmd}"`,
-        { timeout: 120_000 },
-        (err) => {
-          // Clean up the temp script (best-effort)
-          try { fs.unlinkSync(scriptFile); } catch { /* ignore */ }
+      this._processManager.exec(
+        "powershell",
+        ["-NoProfile", "-Command", elevateCmd],
+        { timeoutMs: 120_000 },
+      ).then(() => {
+        // Clean up the temp script (best-effort)
+        try { fs.unlinkSync(scriptFile); } catch { /* ignore */ }
 
-          if (err) {
-            vscode.window.showWarningMessage(failMsg);
-            resolve(false);
-            return;
-          }
+        // Read the marker file to check what happened in the elevated session
+        try {
+          const result = fs.readFileSync(markerFile, "utf-8").trim();
+          try { fs.unlinkSync(markerFile); } catch { /* ignore */ }
 
-          // Read the marker file to check what happened in the elevated session
-          try {
-            const result = fs.readFileSync(markerFile, "utf-8").trim();
-            try { fs.unlinkSync(markerFile); } catch { /* ignore */ }
-
-            if (result === "ok") {
-              vscode.window.showInformationMessage(successMsg);
-              resolve(true);
-            } else {
-              vscode.window.showWarningMessage(`Networking setup error: ${result}`);
-              resolve(false);
-            }
-          } catch {
-            // Marker file doesn't exist - UAC was denied or script never ran
-            vscode.window.showWarningMessage(
-              `Networking setup did not complete. Was the UAC prompt accepted?`,
-            );
+          if (result === "ok") {
+            vscode.window.showInformationMessage(successMsg);
+            resolve(true);
+          } else {
+            vscode.window.showWarningMessage(`Networking setup error: ${result}`);
             resolve(false);
           }
-        },
-      );
+        } catch {
+          // Marker file doesn't exist - UAC was denied or script never ran
+          vscode.window.showWarningMessage(
+            `Networking setup did not complete. Was the UAC prompt accepted?`,
+          );
+          resolve(false);
+        }
+      }).catch(() => {
+        // Clean up the temp script (best-effort)
+        try { fs.unlinkSync(scriptFile); } catch { /* ignore */ }
+        vscode.window.showWarningMessage(failMsg);
+        resolve(false);
+      });
     });
   }
 }

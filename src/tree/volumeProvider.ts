@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { BcContainerService, DockerVolume } from "../docker/bcContainerService";
+import { debounce } from "../util/debounce";
 
 // ──────────────────────── Volume Tree Item ─────────────────────
 
@@ -31,7 +32,16 @@ export class VolumeProvider implements vscode.TreeDataProvider<VolumeTreeItem> {
     new vscode.EventEmitter<VolumeTreeItem | undefined | void>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
+  private readonly _debouncedFire = debounce(() => {
+    this._onDidChangeTreeData.fire();
+  }, 150);
+
   constructor(private bcService: BcContainerService) {}
+
+  dispose(): void {
+    this._debouncedFire.cancel();
+    this._onDidChangeTreeData.dispose();
+  }
 
   getTreeItem(element: VolumeTreeItem): vscode.TreeItem {
     return element;
@@ -47,6 +57,6 @@ export class VolumeProvider implements vscode.TreeDataProvider<VolumeTreeItem> {
   }
 
   refresh(): void {
-    this._onDidChangeTreeData.fire();
+    this._debouncedFire();
   }
 }

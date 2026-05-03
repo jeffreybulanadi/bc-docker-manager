@@ -1,10 +1,11 @@
-﻿import { exec, spawn } from "child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 import { DockerService } from "./dockerService";
 import { SWRCache } from "../services/swrCache";
+import { ProcessManager } from "../util/processManager";
+import { withRetry, isTransientDockerError } from "../util/retry";
 
 // ────────────────────────── Constants ───────────────────────────
 
@@ -44,6 +45,7 @@ const NAV_MODULE_IMPORT =
  */
 export class BcContainerService {
   private readonly _volumeCache: SWRCache<DockerVolume[]>;
+  private readonly _processManager = new ProcessManager();
 
   constructor(private docker: DockerService) {
     this._volumeCache = new SWRCache<DockerVolume[]>(30_000);
@@ -77,16 +79,16 @@ export class BcContainerService {
     return lines.find(l => l.trim())?.trim() ?? clean;
   }
 
-  private exec(command: string, timeoutMs = EXEC_TIMEOUT_MS): Promise<string> {
-    return new Promise((resolve, reject) => {
-      exec(command, { timeout: timeoutMs, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
-        if (err) {
-          reject(new Error(BcContainerService.cleanPsError(stderr) || err.message));
-          return;
-        }
-        resolve(stdout);
-      });
-    });
+  /** Run a docker command and collect stdout. Rejects with a clean error message. */
+  private async _run(args: string[], timeoutMs = EXEC_TIMEOUT_MS): Promise<string> {
+    try {
+      return await this._processManager.exec("docker", args, { timeoutMs, maxBufferBytes: 10 * 1024 * 1024 });
+    } catch (err) {
+      if (err instanceof Error) {
+        throw new Error(BcContainerService.cleanPsError(err.message) || err.message);
+      }
+      throw err;
+    }
   }
 
   /** Run a PowerShell utility command inside a container (no NAV module). */
@@ -95,10 +97,13 @@ export class BcContainerService {
     psCommand: string,
     timeoutMs = EXEC_TIMEOUT_MS,
   ): Promise<string> {
-    const escaped = psCommand.replace(/"/g, '\\"');
-    return this.exec(
-      `docker exec ${containerName} powershell -NoProfile -Command "${escaped}"`,
-      timeoutMs,
+    return withRetry(
+      () => this._processManager.exec(
+        "docker",
+        ["exec", containerName, "powershell", "-NoProfile", "-Command", psCommand],
+        { timeoutMs, maxBufferBytes: 10 * 1024 * 1024 },
+      ),
+      { maxAttempts: 2, retryable: isTransientDockerError },
     );
   }
 
@@ -108,10 +113,13 @@ export class BcContainerService {
     psCommand: string,
     timeoutMs = EXEC_TIMEOUT_MS,
   ): Promise<string> {
-    const escaped = (NAV_MODULE_IMPORT + psCommand).replace(/"/g, '\\"');
-    return this.exec(
-      `docker exec ${containerName} powershell -NoProfile -Command "${escaped}"`,
-      timeoutMs,
+    return withRetry(
+      () => this._processManager.exec(
+        "docker",
+        ["exec", containerName, "powershell", "-NoProfile", "-Command", NAV_MODULE_IMPORT + psCommand],
+        { timeoutMs, maxBufferBytes: 10 * 1024 * 1024 },
+      ),
+      { maxAttempts: 2, retryable: isTransientDockerError },
     );
   }
 
@@ -150,7 +158,7 @@ export class BcContainerService {
       `$s.Dispose()`;
 
     return new Promise<void>((resolve, reject) => {
-      const proc = spawn("docker", ["exec", "-i", containerName, "powershell", "-NoProfile", "-Command", psCmd]);
+      const proc = this._processManager.spawn("docker", ["exec", "-i", containerName, "powershell", "-NoProfile", "-Command", psCmd]);
       let stderr = "";
       let settled = false;
 
@@ -166,7 +174,7 @@ export class BcContainerService {
         timeoutMs,
       );
 
-      proc.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
+      proc.stderr!.on("data", (d: Buffer) => { stderr += d.toString(); });
       proc.on("error", (err: Error) => { clearTimeout(timer); fail(err); });
       proc.on("close", (code: number | null) => {
         clearTimeout(timer);
@@ -187,11 +195,11 @@ export class BcContainerService {
         const buf = pending.length ? Buffer.concat([pending, raw]) : raw;
         const usable = buf.length - (buf.length % 3);
         if (usable > 0) {
-          const canContinue = proc.stdin.write(buf.slice(0, usable).toString("base64") + "\n");
+          const canContinue = proc.stdin!.write(buf.slice(0, usable).toString("base64") + "\n");
           pending = buf.slice(usable) as Buffer<ArrayBuffer>;
           if (!canContinue) {
             readStream.pause();
-            proc.stdin.once("drain", () => readStream.resume());
+            proc.stdin!.once("drain", () => readStream.resume());
           }
         } else {
           pending = buf as Buffer<ArrayBuffer>;
@@ -200,9 +208,9 @@ export class BcContainerService {
 
       readStream.on("end", () => {
         if (pending.length > 0) {
-          proc.stdin.write(pending.toString("base64") + "\n");
+          proc.stdin!.write(pending.toString("base64") + "\n");
         }
-        proc.stdin.end();
+        proc.stdin!.end();
       });
 
       readStream.on("error", (err: Error) => { clearTimeout(timer); fail(err); });
@@ -241,7 +249,7 @@ export class BcContainerService {
       `$f.Close()`;
 
     return new Promise<void>((resolve, reject) => {
-      const proc = spawn("docker", ["exec", containerName, "powershell", "-NoProfile", "-Command", psCmd]);
+      const proc = this._processManager.spawn("docker", ["exec", containerName, "powershell", "-NoProfile", "-Command", psCmd]);
       const writeStream = fs.createWriteStream(hostPath);
       let b64Buf = "";
       let stderr = "";
@@ -258,9 +266,9 @@ export class BcContainerService {
       const timer = setTimeout(() => { proc.kill(); fail(new Error("File transfer timed out")); }, timeoutMs);
 
       writeStream.on("error", (err: Error) => { clearTimeout(timer); proc.kill(); fail(err); });
-      proc.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
+      proc.stderr!.on("data", (d: Buffer) => { stderr += d.toString(); });
 
-      proc.stdout.on("data", (chunk: Buffer) => {
+      proc.stdout!.on("data", (chunk: Buffer) => {
         b64Buf += chunk.toString("ascii");
         const usable = b64Buf.length - (b64Buf.length % 4);
         if (usable >= 4) {
@@ -268,8 +276,8 @@ export class BcContainerService {
           b64Buf = b64Buf.slice(usable);
           const canContinue = writeStream.write(decoded);
           if (!canContinue) {
-            proc.stdout.pause();
-            writeStream.once("drain", () => proc.stdout.resume());
+            proc.stdout!.pause();
+            writeStream.once("drain", () => proc.stdout!.resume());
           }
         }
       });
@@ -312,9 +320,10 @@ export class BcContainerService {
     const eContainerZip = BcContainerService.escapePsPath(containerZip);
 
     try {
-      await this.exec(
-        `powershell -NoProfile -Command "Compress-Archive -Path '${eHostDir}\\*' -DestinationPath '${eZip}' -Force"`,
-        60_000,
+      await this._processManager.exec(
+        "powershell",
+        ["-NoProfile", "-Command", `Compress-Archive -Path '${eHostDir}\\*' -DestinationPath '${eZip}' -Force`],
+        { timeoutMs: 60_000 },
       );
       await this.execInContainer(
         containerName,
@@ -777,8 +786,8 @@ export class BcContainerService {
   // ── v1.3: Container Resource Monitor ─────────────────────────
 
   async getContainerStats(containerName: string): Promise<string> {
-    const raw = await this.exec(
-      `docker stats ${containerName} --no-stream --format "{{json .}}"`,
+    const raw = await this._run(
+      ["stats", containerName, "--no-stream", "--format", "{{json .}}"],
       10_000,
     );
     return raw.trim();
@@ -1238,13 +1247,13 @@ export class BcContainerService {
         progress.report({ message: "Committing container to image…" });
         const safeTag = containerName.toLowerCase().replace(/[^a-z0-9._-]/g, "-");
         const imageName = `${safeTag}-export:latest`;
-        await this.exec(`docker commit ${containerName} ${imageName}`, 600_000);
+        await this._run(["commit", containerName, imageName], 600_000);
 
         progress.report({ message: "Saving image to file…" });
-        await this.exec(`docker save -o "${saveUri.fsPath}" ${imageName}`, 600_000);
+        await this._run(["save", "-o", saveUri.fsPath, imageName], 600_000);
 
         // Remove the temporary image
-        await this.exec(`docker rmi ${imageName}`).catch(() => {});
+        await this._run(["rmi", imageName]).catch(() => {});
 
         vscode.window.showInformationMessage(
           `Container exported to ${saveUri.fsPath}`,
@@ -1264,7 +1273,7 @@ export class BcContainerService {
     await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: "Importing container…" },
       async () => {
-        await this.exec(`docker load -i "${uris[0].fsPath}"`, 600_000);
+        await this._run(["load", "-i", uris[0].fsPath], 600_000);
         vscode.window.showInformationMessage(
           `Image imported from ${path.basename(uris[0].fsPath)}. Check Local Images.`,
         );
@@ -1279,7 +1288,7 @@ export class BcContainerService {
   }
 
   private async _fetchVolumes(): Promise<DockerVolume[]> {
-    const raw = await this.exec('docker volume ls --format "{{json .}}"');
+    const raw = await this._run(["volume", "ls", "--format", "{{json .}}"]);
     return raw
       .split("\n")
       .filter((l) => l.trim())
@@ -1300,18 +1309,18 @@ export class BcContainerService {
       placeHolder: "my-bc-data",
     });
     if (!name) { return; }
-    await this.exec(`docker volume create ${name}`);
+    await this._run(["volume", "create", name]);
     this._volumeCache.invalidate("all");
     vscode.window.showInformationMessage(`Volume "${name}" created.`);
   }
 
   async removeVolume(name: string): Promise<void> {
-    await this.exec(`docker volume rm ${name}`);
+    await this._run(["volume", "rm", name]);
     this._volumeCache.invalidate("all");
   }
 
   async inspectVolume(name: string): Promise<void> {
-    const raw = await this.exec(`docker volume inspect ${name}`);
+    const raw = await this._run(["volume", "inspect", name]);
     const doc = await vscode.workspace.openTextDocument({
       content: raw,
       language: "json",
