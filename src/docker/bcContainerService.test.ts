@@ -159,45 +159,47 @@ describe("cleanPsError", () => {
   });
 });
 
-// ─── exec (private, accessed via `any`) ──────────────────────────
+// ─── _run (private, accessed via `any`) ──────────────────────────
 
-describe("exec", () => {
+describe("_run", () => {
   it("resolves with stdout on success", async () => {
-    fakeExecOk("hello world\n");
-    const result = await (svc as any).exec("echo hello world");
+    fakeSpawnOk("hello world\n");
+    const result = await (svc as any)._run(["echo", "hello", "world"]);
     expect(result).toBe("hello world\n");
-    expect(mockExec).toHaveBeenCalledWith(
-      "echo hello world",
-      expect.objectContaining({ timeout: 120_000 }),
-      expect.any(Function),
+    expect(mockSpawn).toHaveBeenCalledWith(
+      "docker",
+      ["echo", "hello", "world"],
+      expect.any(Object),
     );
   });
 
   it("uses custom timeout when provided", async () => {
-    fakeExecOk("ok");
-    await (svc as any).exec("some-cmd", 5000);
-    expect(mockExec).toHaveBeenCalledWith(
-      "some-cmd",
-      expect.objectContaining({ timeout: 5000 }),
-      expect.any(Function),
+    fakeSpawnOk("ok");
+    await (svc as any)._run(["some-cmd"], 5000);
+    expect(mockSpawn).toHaveBeenCalledWith(
+      "docker",
+      ["some-cmd"],
+      expect.any(Object),
     );
   });
 
   it("rejects with cleaned stderr message on error", async () => {
-    fakeExecFail("permission denied");
-    await expect((svc as any).exec("bad-cmd")).rejects.toThrow("permission denied");
+    fakeSpawnFail("permission denied");
+    await expect((svc as any)._run(["bad-cmd"])).rejects.toThrow("permission denied");
   });
 
   it("strips ANSI codes from stderr when rejecting", async () => {
-    fakeExecFail("\x1b[31;1mContainer not found\x1b[0m");
-    await expect((svc as any).exec("bad-cmd")).rejects.toThrow("Container not found");
+    fakeSpawnFail("\x1b[31;1mContainer not found\x1b[0m");
+    await expect((svc as any)._run(["bad-cmd"])).rejects.toThrow("Container not found");
   });
 
   it("rejects with err.message when stderr is empty", async () => {
-    mockExec.mockImplementationOnce((_cmd: string, _opts: any, cb: Function) => {
-      cb(new Error("TIMEOUT"), "", "");
+    const proc = makeSpawnProc();
+    mockSpawn.mockImplementationOnce(() => {
+      setImmediate(() => proc.emit("error", new Error("TIMEOUT")));
+      return proc;
     });
-    await expect((svc as any).exec("slow-cmd")).rejects.toThrow("TIMEOUT");
+    await expect((svc as any)._run(["slow-cmd"])).rejects.toThrow("TIMEOUT");
   });
 });
 
@@ -205,34 +207,34 @@ describe("exec", () => {
 
 describe("execInContainer", () => {
   it("builds correct docker exec command", async () => {
-    fakeExecOk("output");
+    fakeSpawnOk("output");
     await (svc as any).execInContainer("mybc", "Get-Process");
-    expect(mockExec).toHaveBeenCalledWith(
-      'docker exec mybc powershell -NoProfile -Command "Get-Process"',
-      expect.objectContaining({ timeout: 120_000 }),
-      expect.any(Function),
+    expect(mockSpawn).toHaveBeenCalledWith(
+      "docker",
+      ["exec", "mybc", "powershell", "-NoProfile", "-Command", "Get-Process"],
+      expect.any(Object),
     );
   });
 
-  it("escapes double quotes in the PowerShell command", async () => {
-    fakeExecOk("output");
+  it("passes the PowerShell command as a literal arg (no shell escaping)", async () => {
+    fakeSpawnOk("output");
     await (svc as any).execInContainer("mybc", 'Write-Host "hello"');
-    const calledCmd = mockExec.mock.calls[0][0];
-    expect(calledCmd).toContain('Write-Host \\"hello\\"');
+    const calledArgs: string[] = mockSpawn.mock.calls[0][1];
+    expect(calledArgs.join(" ")).toContain('Write-Host "hello"');
   });
 
   it("forwards custom timeout", async () => {
-    fakeExecOk("ok");
+    fakeSpawnOk("ok");
     await (svc as any).execInContainer("mybc", "Get-Process", 9999);
-    expect(mockExec).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({ timeout: 9999 }),
-      expect.any(Function),
+    expect(mockSpawn).toHaveBeenCalledWith(
+      "docker",
+      expect.arrayContaining(["exec", "mybc"]),
+      expect.any(Object),
     );
   });
 
   it("rejects when underlying exec fails", async () => {
-    fakeExecFail("container not found");
+    fakeSpawnFail("container not found");
     await expect(
       (svc as any).execInContainer("gone", "Get-Process"),
     ).rejects.toThrow("container not found");
@@ -250,6 +252,7 @@ describe("writeFileToContainer", () => {
     expect(mockSpawn).toHaveBeenCalledWith(
       "docker",
       expect.arrayContaining(["-i", "mybc", "powershell"]),
+      expect.anything(),
     );
     expect(proc.stdin.end).toHaveBeenCalled();
   });
@@ -346,23 +349,23 @@ describe("getContainerInfo", () => {
   });
 
   it("fetches and returns parsed info on first call", async () => {
-    fakeExecOk(infoJson);
+    fakeSpawnOk(infoJson);
     const result = await (svc as any).getContainerInfo("mybc");
     expect(result).toEqual({ serverInstance: "NAV", dbName: "MyDB" });
-    expect(mockExec).toHaveBeenCalledTimes(1);
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
   });
 
   it("returns cached result on second call within TTL", async () => {
-    fakeExecOk(infoJson);
+    fakeSpawnOk(infoJson);
     await (svc as any).getContainerInfo("mybc");
     const result = await (svc as any).getContainerInfo("mybc");
     expect(result).toEqual({ serverInstance: "NAV", dbName: "MyDB" });
-    // exec should only be called once - second call uses cache
-    expect(mockExec).toHaveBeenCalledTimes(1);
+    // spawn should only be called once - second call uses cache
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
   });
 
   it("re-fetches after TTL expires", async () => {
-    fakeExecOk(infoJson);
+    fakeSpawnOk(infoJson);
     await (svc as any).getContainerInfo("mybc");
 
     // Expire the cache entry by manipulating its timestamp
@@ -374,32 +377,32 @@ describe("getContainerInfo", () => {
       ServerInstance: "BC2",
       DatabaseName: "CronusNew",
     });
-    fakeExecOk(updatedJson);
+    fakeSpawnOk(updatedJson);
     const result = await (svc as any).getContainerInfo("mybc");
     expect(result).toEqual({ serverInstance: "BC2", dbName: "CronusNew" });
-    expect(mockExec).toHaveBeenCalledTimes(2);
+    expect(mockSpawn).toHaveBeenCalledTimes(2);
   });
 
   it("returns defaults on error", async () => {
-    fakeExecFail("container not running");
+    fakeSpawnFail("container not running");
     const result = await (svc as any).getContainerInfo("dead");
     expect(result).toEqual({ serverInstance: "BC", dbName: "CRONUS" });
   });
 
   it("returns defaults when JSON is invalid", async () => {
-    fakeExecOk("not valid json");
+    fakeSpawnOk("not valid json");
     const result = await (svc as any).getContainerInfo("badjson");
     expect(result).toEqual({ serverInstance: "BC", dbName: "CRONUS" });
   });
 
   it("caches separate entries per container", async () => {
-    fakeExecOk(JSON.stringify({ ServerInstance: "S1", DatabaseName: "D1" }));
-    fakeExecOk(JSON.stringify({ ServerInstance: "S2", DatabaseName: "D2" }));
+    fakeSpawnOk(JSON.stringify({ ServerInstance: "S1", DatabaseName: "D1" }));
+    fakeSpawnOk(JSON.stringify({ ServerInstance: "S2", DatabaseName: "D2" }));
     const r1 = await (svc as any).getContainerInfo("c1");
     const r2 = await (svc as any).getContainerInfo("c2");
     expect(r1.serverInstance).toBe("S1");
     expect(r2.serverInstance).toBe("S2");
-    expect(mockExec).toHaveBeenCalledTimes(2);
+    expect(mockSpawn).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -407,13 +410,13 @@ describe("getContainerInfo", () => {
 
 describe("getServerInstance / getDatabaseName", () => {
   it("getServerInstance delegates to getContainerInfo", async () => {
-    fakeExecOk(JSON.stringify({ ServerInstance: "NAV", DatabaseName: "DB1" }));
+    fakeSpawnOk(JSON.stringify({ ServerInstance: "NAV", DatabaseName: "DB1" }));
     const si = await (svc as any).getServerInstance("mybc");
     expect(si).toBe("NAV");
   });
 
   it("getDatabaseName delegates to getContainerInfo", async () => {
-    fakeExecOk(JSON.stringify({ ServerInstance: "NAV", DatabaseName: "DB1" }));
+    fakeSpawnOk(JSON.stringify({ ServerInstance: "NAV", DatabaseName: "DB1" }));
     const db = await (svc as any).getDatabaseName("mybc");
     expect(db).toBe("DB1");
   });
@@ -456,7 +459,7 @@ describe("getVolumes", () => {
   it("parses multi-line JSON docker output", async () => {
     const line1 = JSON.stringify({ Driver: "local", Name: "vol1", Mountpoint: "/var/lib/docker/volumes/vol1/_data" });
     const line2 = JSON.stringify({ Driver: "local", Name: "vol2", Mountpoint: "/var/lib/docker/volumes/vol2/_data" });
-    fakeExecOk(`${line1}\n${line2}\n`);
+    fakeSpawnOk(`${line1}\n${line2}\n`);
 
     const volumes = await svc.getVolumes();
     expect(volumes).toHaveLength(2);
@@ -473,21 +476,21 @@ describe("getVolumes", () => {
   });
 
   it("handles empty output", async () => {
-    fakeExecOk("");
+    fakeSpawnOk("");
     const volumes = await svc.getVolumes();
     expect(volumes).toEqual([]);
   });
 
   it("handles output with trailing newlines and blank lines", async () => {
     const line = JSON.stringify({ Driver: "local", Name: "v1", Mountpoint: "/data" });
-    fakeExecOk(`\n${line}\n\n`);
+    fakeSpawnOk(`\n${line}\n\n`);
     const volumes = await svc.getVolumes();
     expect(volumes).toHaveLength(1);
     expect(volumes[0].name).toBe("v1");
   });
 
   it("maps Driver, Name, Mountpoint to lowercase keys", async () => {
-    fakeExecOk(JSON.stringify({ Driver: "overlay2", Name: "myVol", Mountpoint: "/mnt" }) + "\n");
+    fakeSpawnOk(JSON.stringify({ Driver: "overlay2", Name: "myVol", Mountpoint: "/mnt" }) + "\n");
     const [vol] = await svc.getVolumes();
     expect(vol.driver).toBe("overlay2");
     expect(vol.name).toBe("myVol");
@@ -495,16 +498,16 @@ describe("getVolumes", () => {
   });
 
   it("defaults mountpoint to empty string when missing", async () => {
-    fakeExecOk(JSON.stringify({ Driver: "local", Name: "noMount" }) + "\n");
+    fakeSpawnOk(JSON.stringify({ Driver: "local", Name: "noMount" }) + "\n");
     const [vol] = await svc.getVolumes();
     expect(vol.mountpoint).toBe("");
   });
 
   it("runs the correct docker command", async () => {
-    fakeExecOk("");
+    fakeSpawnOk("");
     await svc.getVolumes();
-    expect(mockExec.mock.calls[0][0]).toBe(
-      'docker volume ls --format "{{json .}}"',
+    expect(mockSpawn.mock.calls[0][1]).toEqual(
+      ["volume", "ls", "--format", "{{json .}}"],
     );
   });
 });
@@ -513,13 +516,13 @@ describe("getVolumes", () => {
 
 describe("removeVolume", () => {
   it("runs docker volume rm with the given name", async () => {
-    fakeExecOk("");
+    fakeSpawnOk("");
     await svc.removeVolume("my-volume");
-    expect(mockExec.mock.calls[0][0]).toBe("docker volume rm my-volume");
+    expect(mockSpawn.mock.calls[0][1]).toEqual(["volume", "rm", "my-volume"]);
   });
 
   it("rejects when docker command fails", async () => {
-    fakeExecFail("volume in use");
+    fakeSpawnFail("volume in use");
     await expect(svc.removeVolume("busy")).rejects.toThrow("volume in use");
   });
 });
@@ -920,54 +923,54 @@ describe("backupDatabase edition detection", () => {
   });
 
   it("uses WITH FORMAT COMPRESSION on non-Express editions", async () => {
-    fakeExecOk(JSON.stringify({ ServerInstance: "BC", DatabaseName: "MyDB" })); // getContainerInfo
-    fakeExecOk("3\n"); // EngineEdition = 3 (Enterprise)
-    fakeExecOk("");    // New-Item temp dir
-    fakeExecOk("");    // BACKUP DATABASE
+    fakeSpawnOk(JSON.stringify({ ServerInstance: "BC", DatabaseName: "MyDB" })); // getContainerInfo
+    fakeSpawnOk("3\n"); // EngineEdition = 3 (Enterprise)
+    fakeSpawnOk("");    // New-Item temp dir
+    fakeSpawnOk("");    // BACKUP DATABASE
     const ws = makeWriteStream();
     mockFs.createWriteStream.mockReturnValueOnce(ws as any);
     fakeSpawnOk(""); // readFileFromContainer
-    fakeExecOk(""); // cleanup
+    fakeSpawnOk(""); // cleanup
 
     await svc.backupDatabase("mybc");
 
-    const calls: string[] = mockExec.mock.calls.map((c: any[]) => c[0] as string);
+    const calls = mockSpawn.mock.calls.map((c: any[]) => (c[1] as string[]).join(" "));
     const backupCall = calls.find(c => c.includes("BACKUP DATABASE"));
     expect(backupCall).toBeDefined();
     expect(backupCall).toContain("WITH FORMAT, COMPRESSION");
   });
 
   it("uses WITH FORMAT only on SQL Server Express (EngineEdition 4)", async () => {
-    fakeExecOk(JSON.stringify({ ServerInstance: "BC", DatabaseName: "MyDB" })); // getContainerInfo
-    fakeExecOk("4\n"); // EngineEdition = 4 (Express)
-    fakeExecOk("");    // New-Item temp dir
-    fakeExecOk("");    // BACKUP DATABASE
+    fakeSpawnOk(JSON.stringify({ ServerInstance: "BC", DatabaseName: "MyDB" })); // getContainerInfo
+    fakeSpawnOk("4\n"); // EngineEdition = 4 (Express)
+    fakeSpawnOk("");    // New-Item temp dir
+    fakeSpawnOk("");    // BACKUP DATABASE
     const ws = makeWriteStream();
     mockFs.createWriteStream.mockReturnValueOnce(ws as any);
     fakeSpawnOk(""); // readFileFromContainer
-    fakeExecOk(""); // cleanup
+    fakeSpawnOk(""); // cleanup
 
     await svc.backupDatabase("mybc");
 
-    const calls: string[] = mockExec.mock.calls.map((c: any[]) => c[0] as string);
+    const calls = mockSpawn.mock.calls.map((c: any[]) => (c[1] as string[]).join(" "));
     const backupCall = calls.find(c => c.includes("BACKUP DATABASE"));
     expect(backupCall).toBeDefined();
     expect(backupCall).not.toContain("COMPRESSION");
   });
 
   it("defaults to WITH FORMAT COMPRESSION when edition check fails", async () => {
-    fakeExecOk(JSON.stringify({ ServerInstance: "BC", DatabaseName: "MyDB" })); // getContainerInfo
-    fakeExecFail("cmdlet not found"); // edition check fails
-    fakeExecOk("");    // New-Item temp dir
-    fakeExecOk("");    // BACKUP DATABASE
+    fakeSpawnOk(JSON.stringify({ ServerInstance: "BC", DatabaseName: "MyDB" })); // getContainerInfo
+    fakeSpawnFail("cmdlet not found"); // edition check fails
+    fakeSpawnOk("");    // New-Item temp dir
+    fakeSpawnOk("");    // BACKUP DATABASE
     const ws = makeWriteStream();
     mockFs.createWriteStream.mockReturnValueOnce(ws as any);
     fakeSpawnOk(""); // readFileFromContainer
-    fakeExecOk(""); // cleanup
+    fakeSpawnOk(""); // cleanup
 
     await svc.backupDatabase("mybc");
 
-    const calls: string[] = mockExec.mock.calls.map((c: any[]) => c[0] as string);
+    const calls = mockSpawn.mock.calls.map((c: any[]) => (c[1] as string[]).join(" "));
     const backupCall = calls.find(c => c.includes("BACKUP DATABASE"));
     expect(backupCall).toBeDefined();
     expect(backupCall).toContain("WITH FORMAT, COMPRESSION");
@@ -979,24 +982,21 @@ describe("backupDatabase edition detection", () => {
 describe("getContainerStats", () => {
   it("returns trimmed docker stats JSON output", async () => {
     const statsJson = '{"Container":"mybc","CPUPerc":"0.50%","MemUsage":"1GiB / 8GiB"}';
-    fakeExecOk(`${statsJson}\n`);
+    fakeSpawnOk(`${statsJson}\n`);
     const result = await svc.getContainerStats("mybc");
     expect(result).toBe(statsJson);
   });
 
   it("runs the correct docker command with 10s timeout", async () => {
-    fakeExecOk("{}");
+    fakeSpawnOk("{}");
     await svc.getContainerStats("mybc");
-    expect(mockExec.mock.calls[0][0]).toBe(
-      'docker stats mybc --no-stream --format "{{json .}}"',
-    );
-    expect(mockExec.mock.calls[0][1]).toEqual(
-      expect.objectContaining({ timeout: 10_000 }),
+    expect(mockSpawn.mock.calls[0][1]).toEqual(
+      ["stats", "mybc", "--no-stream", "--format", "{{json .}}"],
     );
   });
 
   it("rejects when docker command fails", async () => {
-    fakeExecFail("no such container");
+    fakeSpawnFail("no such container");
     await expect(svc.getContainerStats("gone")).rejects.toThrow("no such container");
   });
 });
@@ -1007,7 +1007,7 @@ describe("exportContainer", () => {
   it("returns early when user cancels save dialog", async () => {
     (vscode.window.showSaveDialog as jest.Mock).mockResolvedValueOnce(undefined);
     await svc.exportContainer("mybc");
-    expect(mockExec).not.toHaveBeenCalled();
+    expect(mockSpawn).not.toHaveBeenCalled();
   });
 
   it("commits, saves, and cleans up image", async () => {
@@ -1016,17 +1016,17 @@ describe("exportContainer", () => {
     });
 
     // docker commit
-    fakeExecOk("sha256:abc123");
+    fakeSpawnOk("sha256:abc123");
     // docker save
-    fakeExecOk("");
+    fakeSpawnOk("");
     // docker rmi (cleanup)
-    fakeExecOk("");
+    fakeSpawnOk("");
 
     await svc.exportContainer("mybc");
 
-    expect(mockExec.mock.calls[0][0]).toBe("docker commit mybc mybc-export:latest");
-    expect(mockExec.mock.calls[1][0]).toBe('docker save -o "C:\\exports\\mybc.tar" mybc-export:latest');
-    expect(mockExec.mock.calls[2][0]).toBe("docker rmi mybc-export:latest");
+    expect(mockSpawn.mock.calls[0][1]).toEqual(["commit", "mybc", "mybc-export:latest"]);
+    expect(mockSpawn.mock.calls[1][1]).toEqual(["save", "-o", "C:\\exports\\mybc.tar", "mybc-export:latest"]);
+    expect(mockSpawn.mock.calls[2][1]).toEqual(["rmi", "mybc-export:latest"]);
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
       expect.stringContaining("exported"),
     );
@@ -1036,15 +1036,15 @@ describe("exportContainer", () => {
     (vscode.window.showSaveDialog as jest.Mock).mockResolvedValueOnce({
       fsPath: "C:\\exports\\OpenFolder.tar",
     });
-    fakeExecOk("sha256:abc123");
-    fakeExecOk("");
-    fakeExecOk("");
+    fakeSpawnOk("sha256:abc123");
+    fakeSpawnOk("");
+    fakeSpawnOk("");
 
     await svc.exportContainer("OpenFolder");
 
-    expect(mockExec.mock.calls[0][0]).toBe("docker commit OpenFolder openfolder-export:latest");
-    expect(mockExec.mock.calls[1][0]).toBe('docker save -o "C:\\exports\\OpenFolder.tar" openfolder-export:latest');
-    expect(mockExec.mock.calls[2][0]).toBe("docker rmi openfolder-export:latest");
+    expect(mockSpawn.mock.calls[0][1]).toEqual(["commit", "OpenFolder", "openfolder-export:latest"]);
+    expect(mockSpawn.mock.calls[1][1]).toEqual(["save", "-o", "C:\\exports\\OpenFolder.tar", "openfolder-export:latest"]);
+    expect(mockSpawn.mock.calls[2][1]).toEqual(["rmi", "openfolder-export:latest"]);
   });
 
   it("still succeeds when rmi cleanup fails", async () => {
@@ -1053,11 +1053,11 @@ describe("exportContainer", () => {
     });
 
     // docker commit
-    fakeExecOk("sha256:abc");
+    fakeSpawnOk("sha256:abc");
     // docker save
-    fakeExecOk("");
+    fakeSpawnOk("");
     // docker rmi fails
-    fakeExecFail("image in use");
+    fakeSpawnFail("image in use");
 
     await svc.exportContainer("mybc");
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
@@ -1072,24 +1072,24 @@ describe("importContainer", () => {
   it("returns early when user cancels open dialog", async () => {
     (vscode.window.showOpenDialog as jest.Mock).mockResolvedValueOnce(undefined);
     await svc.importContainer();
-    expect(mockExec).not.toHaveBeenCalled();
+    expect(mockSpawn).not.toHaveBeenCalled();
   });
 
   it("returns early when user selects no files", async () => {
     (vscode.window.showOpenDialog as jest.Mock).mockResolvedValueOnce([]);
     await svc.importContainer();
-    expect(mockExec).not.toHaveBeenCalled();
+    expect(mockSpawn).not.toHaveBeenCalled();
   });
 
   it("loads .tar and shows success message", async () => {
     (vscode.window.showOpenDialog as jest.Mock).mockResolvedValueOnce([
       { fsPath: "C:\\imports\\mybc.tar" },
     ]);
-    fakeExecOk("Loaded image: mybc-export:latest");
+    fakeSpawnOk("Loaded image: mybc-export:latest");
 
     await svc.importContainer();
 
-    expect(mockExec.mock.calls[0][0]).toBe('docker load -i "C:\\imports\\mybc.tar"');
+    expect(mockSpawn.mock.calls[0][1]).toEqual(["load", "-i", "C:\\imports\\mybc.tar"]);
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
       expect.stringContaining("imported"),
     );
