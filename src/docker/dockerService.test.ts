@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Unit tests for DockerService.
  *
  * Tests focus on:
@@ -347,38 +347,38 @@ describe("DockerService.getContainerIp", () => {
   afterEach(() => jest.restoreAllMocks());
 
   it("returns a valid IP from the nat network", async () => {
-    jest.spyOn(svc, "exec").mockResolvedValue("172.17.0.5\n");
+    jest.spyOn(svc as any, "_run").mockResolvedValue("172.17.0.5\n");
     const ip = await svc.getContainerIp("mybc");
     expect(ip).toBe("172.17.0.5");
   });
 
   it("returns undefined when docker outputs a non-IPv4 string", async () => {
     // Simulates the 'invalid IP' daemon warning scenario
-    jest.spyOn(svc, "exec").mockResolvedValue("invalid IP\n");
+    jest.spyOn(svc as any, "_run").mockResolvedValue("invalid IP\n");
     const ip = await svc.getContainerIp("mybc");
     expect(ip).toBeUndefined();
   });
 
   it("returns undefined for <no value>", async () => {
-    jest.spyOn(svc, "exec").mockResolvedValue("<no value>\n");
+    jest.spyOn(svc as any, "_run").mockResolvedValue("<no value>\n");
     const ip = await svc.getContainerIp("mybc");
     expect(ip).toBeUndefined();
   });
 
   it("returns undefined for empty string", async () => {
-    jest.spyOn(svc, "exec").mockResolvedValue("\n");
+    jest.spyOn(svc as any, "_run").mockResolvedValue("\n");
     const ip = await svc.getContainerIp("mybc");
     expect(ip).toBeUndefined();
   });
 
   it("returns undefined when exec throws", async () => {
-    jest.spyOn(svc, "exec").mockRejectedValue(new Error("docker not found"));
+    jest.spyOn(svc as any, "_run").mockRejectedValue(new Error("docker not found"));
     const ip = await svc.getContainerIp("mybc");
     expect(ip).toBeUndefined();
   });
 
   it("falls back to the bridge network when nat has no value", async () => {
-    jest.spyOn(svc, "exec")
+    jest.spyOn(svc as any, "_run")
       .mockResolvedValueOnce("<no value>\n")   // nat
       .mockResolvedValueOnce("192.168.1.5\n"); // bridge
     const ip = await svc.getContainerIp("mybc");
@@ -386,7 +386,7 @@ describe("DockerService.getContainerIp", () => {
   });
 
   it("uses range-based fallback when named networks return no value", async () => {
-    jest.spyOn(svc, "exec")
+    jest.spyOn(svc as any, "_run")
       .mockResolvedValueOnce("<no value>\n")        // nat
       .mockResolvedValueOnce("<no value>\n")        // bridge
       .mockResolvedValueOnce("10.0.0.2  \n");      // range fallback
@@ -452,7 +452,7 @@ describe("DockerService.enrichWithLabels", () => {
   it("handles an empty array without throwing", async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const svc = new DockerService() as any;
-    jest.spyOn(svc, "exec").mockResolvedValue("[]");
+    jest.spyOn(svc as any, "_run").mockResolvedValue("[]");
     await expect(svc.enrichWithLabels([])).resolves.toBeUndefined();
   });
 
@@ -467,12 +467,12 @@ describe("DockerService.enrichWithLabels", () => {
       { Id: "id1", Config: { Labels: { nav: "25.0.0.0", country: "us" } } },
       { Id: "id2", Config: { Labels: { maintainer: "Dynamics SMB" } } },
     ]);
-    const spy = jest.spyOn(svc, "exec").mockResolvedValue(inspectJson);
+    const spy = jest.spyOn(svc as any, "_run").mockResolvedValue(inspectJson);
 
     await svc.enrichWithLabels(containers);
 
     expect(spy).toHaveBeenCalledTimes(1);
-    expect(spy).toHaveBeenCalledWith("docker inspect id1 id2");
+    expect(spy).toHaveBeenCalledWith(["inspect", "id1", "id2"]);
     expect(containers[0].labels).toEqual({ nav: "25.0.0.0", country: "us" });
     expect(containers[1].labels).toEqual({ maintainer: "Dynamics SMB" });
   });
@@ -483,7 +483,7 @@ describe("DockerService.enrichWithLabels", () => {
     const containers = [
       { id: "id1", names: "c1", image: "img1", status: "Up", state: "running", ports: "", createdAt: "", labels: {} },
     ];
-    jest.spyOn(svc, "exec").mockRejectedValue(new Error("inspect failed"));
+    jest.spyOn(svc as any, "_run").mockRejectedValue(new Error("inspect failed"));
 
     await svc.enrichWithLabels(containers);
 
@@ -499,14 +499,14 @@ describe("DockerService.isDockerInstalled", () => {
   it("returns true when docker --version succeeds", async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const svc = new DockerService() as any;
-    jest.spyOn(svc, "exec").mockResolvedValue("Docker version 24.0.0");
+    jest.spyOn(svc as any, "_run").mockResolvedValue("Docker version 24.0.0");
     expect(await svc.isDockerInstalled()).toBe(true);
   });
 
   it("returns false when exec rejects", async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const svc = new DockerService() as any;
-    jest.spyOn(svc, "exec").mockRejectedValue(new Error("not found"));
+    jest.spyOn(svc as any, "_run").mockRejectedValue(new Error("not found"));
     expect(await svc.isDockerInstalled()).toBe(false);
   });
 });
@@ -519,14 +519,14 @@ describe("DockerService.isDockerRunning", () => {
   it("returns true when docker info succeeds", async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const svc = new DockerService() as any;
-    jest.spyOn(svc, "exec").mockResolvedValue("some info output");
+    jest.spyOn(svc as any, "_run").mockResolvedValue("some info output");
     expect(await svc.isDockerRunning()).toBe(true);
   });
 
   it("returns false when exec rejects", async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const svc = new DockerService() as any;
-    jest.spyOn(svc, "exec").mockRejectedValue(new Error("daemon not running"));
+    jest.spyOn(svc as any, "_run").mockRejectedValue(new Error("daemon not running"));
     expect(await svc.isDockerRunning()).toBe(false);
   });
 });
@@ -539,21 +539,21 @@ describe("DockerService.isWindowsContainerMode", () => {
   it("returns true when docker info returns OSType windows", async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const svc = new DockerService() as any;
-    jest.spyOn(svc, "exec").mockResolvedValue(JSON.stringify({ OSType: "windows" }));
+    jest.spyOn(svc as any, "_run").mockResolvedValue(JSON.stringify({ OSType: "windows" }));
     expect(await svc.isWindowsContainerMode()).toBe(true);
   });
 
   it("returns false when OSType is linux", async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const svc = new DockerService() as any;
-    jest.spyOn(svc, "exec").mockResolvedValue(JSON.stringify({ OSType: "linux" }));
+    jest.spyOn(svc as any, "_run").mockResolvedValue(JSON.stringify({ OSType: "linux" }));
     expect(await svc.isWindowsContainerMode()).toBe(false);
   });
 
   it("returns false when exec rejects", async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const svc = new DockerService() as any;
-    jest.spyOn(svc, "exec").mockRejectedValue(new Error("docker not running"));
+    jest.spyOn(svc as any, "_run").mockRejectedValue(new Error("docker not running"));
     expect(await svc.isWindowsContainerMode()).toBe(false);
   });
 });
@@ -566,21 +566,21 @@ describe("DockerService.isCertInstalled", () => {
   it("returns true when powershell returns count > 0", async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const svc = new DockerService() as any;
-    jest.spyOn(svc, "exec").mockResolvedValue("1\n");
+    jest.spyOn(svc._processManager, "exec").mockResolvedValue("1\n");
     expect(await svc.isCertInstalled("mybc")).toBe(true);
   });
 
   it("returns false when count is 0", async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const svc = new DockerService() as any;
-    jest.spyOn(svc, "exec").mockResolvedValue("0\n");
+    jest.spyOn(svc._processManager, "exec").mockResolvedValue("0\n");
     expect(await svc.isCertInstalled("mybc")).toBe(false);
   });
 
   it("returns false when exec rejects", async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const svc = new DockerService() as any;
-    jest.spyOn(svc, "exec").mockRejectedValue(new Error("powershell error"));
+    jest.spyOn(svc._processManager, "exec").mockRejectedValue(new Error("powershell error"));
     expect(await svc.isCertInstalled("mybc")).toBe(false);
   });
 });
@@ -714,7 +714,7 @@ describe("DockerService.enrichWithLabels (additional cases)", () => {
       { id: "id1", names: "c1", image: "img1", status: "Up", state: "running", ports: "", createdAt: "", labels: {} },
     ];
     const inspectJson = JSON.stringify([{ Id: "id1" }]);
-    jest.spyOn(svc, "exec").mockResolvedValue(inspectJson);
+    jest.spyOn(svc as any, "_run").mockResolvedValue(inspectJson);
 
     await svc.enrichWithLabels(containers);
 
@@ -727,7 +727,7 @@ describe("DockerService.enrichWithLabels (additional cases)", () => {
     const containers = [
       { id: "id1", names: "c1", image: "img1", status: "Up", state: "running", ports: "", createdAt: "", labels: {} },
     ];
-    jest.spyOn(svc, "exec").mockResolvedValue("{not valid json[");
+    jest.spyOn(svc as any, "_run").mockResolvedValue("{not valid json[");
 
     await svc.enrichWithLabels(containers);
 
