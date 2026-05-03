@@ -13,7 +13,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 - Renamed the "What's New" command to "Show Release Notes" in the Command Palette for clarity. The setting description is updated to match.
 
-- Hardened the internal architecture for resilience and maintainability: retry with exponential backoff and full jitter on all Docker CLI calls, process lifecycle tracking to prevent leaked processes on deactivate, structured output channel logger with level filtering and automatic telemetry forwarding, centralized configuration service, debounced tree view refresh, and fixed a stale-inflight-entry bug in the SWR cache.
+- Enhanced internal architecture: retry with exponential backoff and full jitter on all Docker CLI calls, process lifecycle tracking to prevent leaked processes on deactivate, structured output channel logger with level filtering and automatic telemetry forwarding, centralized configuration service, debounced tree view refresh, and fixed a stale-inflight-entry bug in the SWR cache.
 
 ---
 
