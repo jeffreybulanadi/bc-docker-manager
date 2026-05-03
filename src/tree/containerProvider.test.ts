@@ -125,11 +125,15 @@ describe("ContainerProvider.toggleBcFilter", () => {
 // ─── refresh ─────────────────────────────────────────────────────
 
 describe("ContainerProvider.refresh", () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
   it("fires onDidChangeTreeData event", () => {
     const mockDocker = createMockDocker();
     const provider = new ContainerProvider(mockDocker);
 
     provider.refresh();
+    jest.runAllTimers();
 
     // The EventEmitter mock from vscode-mock.ts exposes `fire` as a jest.fn()
     // Access the underlying emitter via the provider's internal field.

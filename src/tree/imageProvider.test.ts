@@ -107,12 +107,16 @@ describe("ImageProvider.toggleBcFilter", () => {
 // ─── refresh ─────────────────────────────────────────────────────
 
 describe("ImageProvider.refresh", () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
   it("fires the onDidChangeTreeData event", () => {
     const provider = new ImageProvider(createMockDocker());
 
     // Access the internal EventEmitter to verify fire() is called
     const emitter = (provider as any)._onDidChangeTreeData;
     provider.refresh();
+    jest.runAllTimers();
 
     expect(emitter.fire).toHaveBeenCalled();
   });
@@ -202,12 +206,16 @@ describe("ImageProvider.getChildren - untagged images", () => {
 // ─── refresh fires event after toggle ────────────────────────────
 
 describe("ImageProvider - refresh fires event after toggle", () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
   it("toggleBcFilter implicitly calls refresh - event emitter fires", () => {
     const provider = new ImageProvider(createMockDocker());
     const emitter = (provider as any)._onDidChangeTreeData;
 
     emitter.fire.mockClear();
     provider.toggleBcFilter();
+    jest.runAllTimers();
 
     expect(emitter.fire).toHaveBeenCalled();
   });

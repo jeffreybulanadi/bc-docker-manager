@@ -128,11 +128,15 @@ describe("VolumeProvider.getChildren", () => {
 // ─── refresh ─────────────────────────────────────────────────────
 
 describe("VolumeProvider.refresh", () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
   it("fires the onDidChangeTreeData event", () => {
     const provider = new VolumeProvider(createMockBcService());
     const emitter = (provider as any)._onDidChangeTreeData;
 
     provider.refresh();
+    jest.runAllTimers();
 
     expect(emitter.fire).toHaveBeenCalled();
   });
