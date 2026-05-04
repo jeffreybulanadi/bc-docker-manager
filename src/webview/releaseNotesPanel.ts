@@ -49,62 +49,85 @@ pre code {
 `;
 
 const PAGE_CSS = `
-/* ── layout ── */
+/* ── three-column layout ── */
 .rn-layout { display: flex; min-height: 100vh; }
-.rn-sidebar {
-  width: 220px; flex-shrink: 0;
-  padding: 28px 12px 40px 20px;
-  box-sizing: border-box;
-}
-.rn-main {
-  flex: 1; min-width: 0;
-  padding: 28px 48px 60px 36px;
-  max-width: 860px;
-  box-sizing: border-box;
-}
 
-/* ── sidebar meta (version badge + date) ── */
-.rn-toc { position: sticky; top: 28px; }
-.rn-sidebar-meta { margin-bottom: 16px; }
-.rn-version-badge {
-  display: inline-block;
-  font-size: .75em; font-weight: 700; letter-spacing: .05em;
-  padding: 2px 9px; border-radius: 10px;
-  background: var(--vscode-badge-background, rgba(128,128,128,.18));
-  color: var(--vscode-badge-foreground, var(--vscode-foreground));
-  margin-bottom: 5px;
+/* ── column 1: version list ── */
+.rn-versions {
+  width: 170px; flex-shrink: 0;
+  padding: 28px 0 40px 14px;
+  box-sizing: border-box;
+  border-right: 1px solid var(--vscode-panel-border, rgba(128,128,128,.12));
 }
-.rn-release-date {
+.rn-versions-inner { position: sticky; top: 28px; }
+.rn-versions-label {
   display: block;
-  font-size: .78em; opacity: .55;
+  font-size: .7em; font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase; opacity: .4;
+  margin: 0 0 8px; padding-left: 10px;
 }
+.rn-ver-list { margin: 0; padding: 0; list-style: none; }
+.rn-ver-list li { margin: 1px 0; }
+.rn-ver-btn {
+  width: 100%; padding: 7px 12px 7px 10px;
+  background: transparent; border: none; border-left: 2px solid transparent;
+  cursor: pointer; text-align: left;
+  color: var(--vscode-foreground); opacity: .6;
+  transition: opacity .15s, border-color .15s, background .15s;
+  border-radius: 0 3px 3px 0;
+}
+.rn-ver-btn:hover { opacity: .85; }
+.rn-ver-btn.rn-ver-active {
+  opacity: 1;
+  border-left-color: var(--vscode-textLink-foreground);
+  background: var(--vscode-list-inactiveSelectionBackground, rgba(128,128,128,.08));
+}
+.rn-ver-num { display: block; font-size: .88em; font-weight: 600; }
+.rn-ver-date { display: block; font-size: .74em; opacity: .7; margin-top: 1px; }
+.rn-ver-btn.rn-ver-active .rn-ver-num { color: var(--vscode-textLink-foreground); }
+.rn-ver-btn.rn-ver-active .rn-ver-date { color: var(--vscode-foreground); opacity: .6; }
 
-/* ── TOC nav ── */
-.rn-toc-label {
-  display: block;
-  font-size: .72em; font-weight: 600; opacity: .5;
-  text-transform: uppercase; letter-spacing: .08em;
-  margin: 14px 0 8px;
+/* ── column 2: in this update ── */
+.rn-itu {
+  width: 155px; flex-shrink: 0;
+  padding: 28px 12px 40px 18px;
+  box-sizing: border-box;
+  border-right: 1px solid var(--vscode-panel-border, rgba(128,128,128,.12));
 }
-.rn-toc ul { margin: 0; padding: 0; list-style: none; }
-.rn-toc ul li { margin: 2px 0; }
-.rn-toc a {
-  text-decoration: none; font-size: .86em;
+.rn-itu-inner { position: sticky; top: 28px; }
+.rn-itu-label {
+  display: block;
+  font-size: .7em; font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase; opacity: .4;
+  margin: 0 0 8px;
+}
+.rn-itu-list { margin: 0; padding: 0; list-style: none; }
+.rn-itu-list li { margin: 2px 0; }
+.rn-itu-list a {
   display: block; padding: 3px 0 3px 10px;
-  color: var(--vscode-foreground);
-  opacity: .6;
+  font-size: .86em; text-decoration: none;
+  color: var(--vscode-foreground); opacity: .6;
   border-left: 2px solid transparent;
   transition: opacity .15s, color .15s, border-color .15s;
   line-height: 1.4;
 }
-.rn-toc a:hover { opacity: 1; text-decoration: none; }
-.rn-toc a[aria-current="true"] {
+.rn-itu-list a:hover { opacity: 1; text-decoration: none; }
+.rn-itu-list a[aria-current="true"] {
   opacity: 1;
   color: var(--vscode-textLink-foreground);
   border-left-color: var(--vscode-textLink-foreground);
 }
 
+/* ── column 3: main content ── */
+.rn-main {
+  flex: 1; min-width: 0;
+  padding: 28px 48px 60px 36px;
+  max-width: 840px;
+  box-sizing: border-box;
+}
+
 /* ── header ── */
+.rn-header { margin-bottom: 24px; }
 .rn-header h1 {
   border-bottom: none; padding-bottom: 0; margin-bottom: 4px;
   font-size: 1.9em; font-weight: 600;
@@ -141,11 +164,8 @@ const PAGE_CSS = `
 .rn-social { font-size: .82em; opacity: .55; }
 .rn-social a { opacity: 1; }
 
-/* ── section heading (small-caps label + horizontal rule) ── */
-.rn-section-wrap {
-  display: flex; align-items: center;
-  margin: 2em 0 .75em;
-}
+/* ── section headings ── */
+.rn-section-wrap { display: flex; align-items: center; margin: 2em 0 .75em; }
 .rn-section-label {
   font-size: .78em; font-weight: 700;
   text-transform: uppercase; letter-spacing: .08em;
@@ -161,8 +181,7 @@ const PAGE_CSS = `
 .rn-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 12px;
-  margin: 0 0 1em;
+  gap: 12px; margin: 0 0 1em;
 }
 .rn-card {
   padding: 14px 16px;
@@ -171,30 +190,22 @@ const PAGE_CSS = `
   background: var(--vscode-editor-inactiveSelectionBackground, rgba(128,128,128,.06));
   line-height: 1.5;
 }
-.rn-card-title {
-  font-weight: 700; font-size: .92em;
-  display: block; margin-bottom: 4px;
-}
+.rn-card-title { font-weight: 700; font-size: .92em; display: block; margin-bottom: 4px; }
 .rn-card-desc { font-size: .88em; opacity: .8; }
 
 /* ── contributor chips ── */
 .rn-contributors { padding: 0; margin: 0; list-style: none; }
 .rn-contributors li { margin: 6px 0; line-height: 1.6; }
 a.rn-contributor {
-  display: inline-block;
-  padding: 1px 10px;
+  display: inline-block; padding: 1px 10px;
   border: 1px solid var(--vscode-panel-border, rgba(128,128,128,.3));
-  border-radius: 20px;
-  font-size: .85em;
-  text-decoration: none;
+  border-radius: 20px; font-size: .85em; text-decoration: none;
   color: var(--vscode-foreground);
-  transition: color .15s, border-color .15s;
-  margin-right: 6px;
+  transition: color .15s, border-color .15s; margin-right: 6px;
 }
 a.rn-contributor:hover {
   color: var(--vscode-textLink-foreground);
-  border-color: var(--vscode-textLink-foreground);
-  text-decoration: none;
+  border-color: var(--vscode-textLink-foreground); text-decoration: none;
 }
 .rn-contributor-desc { font-size: .9em; opacity: .8; }
 
@@ -205,42 +216,13 @@ a.rn-contributor:hover {
 .vscode-dark  .rn-figure img { box-shadow: 0 2px 12px rgba(0,0,0,.55); }
 .rn-figure figcaption { font-size: .8em; opacity: .55; margin-top: 6px; }
 
-/* ── previous releases ── */
-.rn-older-label {
-  display: block;
-  font-size: .75em; font-weight: 600; opacity: .5;
-  text-transform: uppercase; letter-spacing: .08em;
-  margin: 2.5em 0 10px;
+/* ── responsive ── */
+@media (max-width: 660px) {
+  .rn-itu { display: none; }
+  .rn-main { padding: 20px 24px 40px; }
 }
-details.rn-older {
-  margin: 6px 0;
-  border: 1px solid var(--vscode-panel-border, rgba(128,128,128,.18));
-  border-radius: 4px;
-}
-details.rn-older > summary {
-  padding: 10px 16px; cursor: pointer; list-style: none;
-  display: flex; justify-content: space-between; align-items: center;
-  user-select: none; font-size: .93em;
-}
-details.rn-older > summary::-webkit-details-marker { display: none; }
-.vscode-light details.rn-older > summary { background: rgba(0,0,0,.02); }
-.vscode-dark  details.rn-older > summary { background: rgba(255,255,255,.02); }
-.rn-chevron {
-  display: inline-block; transition: transform .2s;
-  opacity: .4; font-size: .85em; margin-left: 8px;
-}
-details.rn-older[open] .rn-chevron { transform: rotate(90deg); }
-.rn-older-meta { display: flex; align-items: center; gap: 12px; }
-.rn-older-date { opacity: .55; font-size: .82em; }
-.rn-older-body { padding: 4px 20px 18px; }
-.rn-older-body .rn-section-wrap { margin: 1.2em 0 .5em; }
-.rn-older-body .rn-section-label { font-size: .72em; opacity: .45; }
-.rn-older-body .rn-section-rule  { opacity: .6; }
-
-/* ── responsive: hide sidebar below 580px ── */
-@media (max-width: 580px) {
-  .rn-sidebar { display: none; }
-  .rn-main { padding: 20px 20px 40px; }
+@media (max-width: 420px) {
+  .rn-versions { display: none; }
 }
 `;
 
@@ -425,10 +407,14 @@ function buildHtml(
 
   let body: string;
   if (releases.length) {
-    const sidebar = renderSidebar(releases[0]);
-    const main    = renderCurrentMain(releases[0], checked, toUri)
-                  + renderOlderList(releases.slice(1), toUri);
-    body = `<aside class="rn-sidebar">${sidebar}</aside><main class="rn-main">${main}</main>`;
+    const verList = renderVersionList(releases);
+    const ituNav  = renderItuNav(releases);
+    const panels  = releases
+      .map((r, i) => renderVersionPanel(r, i, i === 0 ? checked : null, toUri))
+      .join("");
+    body = `<aside class="rn-versions"><div class="rn-versions-inner">${verList}</div></aside>` +
+           `<nav class="rn-itu"><div class="rn-itu-inner">${ituNav}</div></nav>` +
+           `<main class="rn-main">${panels}</main>`;
   } else {
     body = `<main class="rn-main"><p>No release notes available.</p></main>`;
   }
@@ -454,43 +440,78 @@ ${body}
       api.postMessage({ command: "setShowOnUpdate", value: e.target.checked });
     });
   }
-  var links = document.querySelectorAll(".rn-toc a[data-target]");
-  if (links.length && "IntersectionObserver" in window) {
+  var verBtns  = document.querySelectorAll(".rn-ver-btn");
+  var panels   = document.querySelectorAll(".rn-version-panel");
+  var ituLists = document.querySelectorAll(".rn-itu-list");
+  var currentIO = null;
+
+  function setupScrollSpy(idx) {
+    if (currentIO) { currentIO.disconnect(); currentIO = null; }
+    if (!("IntersectionObserver" in window)) { return; }
+    var activeList = document.querySelector(".rn-itu-list[data-itu='" + idx + "']");
+    if (!activeList) { return; }
+    var tocLinks = activeList.querySelectorAll("a[data-target]");
+    if (!tocLinks.length) { return; }
     var map = Object.create(null);
-    links.forEach(function(l){ map[l.getAttribute("data-target")] = l; });
-    var active = null;
-    var io = new IntersectionObserver(function(entries){
-      entries.forEach(function(e){
-        if (e.isIntersecting) {
-          if (active) { active.removeAttribute("aria-current"); }
-          active = map[e.target.id];
-          if (active) { active.setAttribute("aria-current", "true"); }
-        }
-      });
+    tocLinks.forEach(function(l){ map[l.getAttribute("data-target")] = l; });
+    function setActive(id) {
+      Object.keys(map).forEach(function(k){ map[k].removeAttribute("aria-current"); });
+      if (map[id]) { map[id].setAttribute("aria-current", "true"); }
+    }
+    currentIO = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){ if (e.isIntersecting) { setActive(e.target.id); } });
     }, { rootMargin: "-5% 0px -75% 0px" });
     Object.keys(map).forEach(function(id){
       var el = document.getElementById(id);
-      if (el) { io.observe(el); }
+      if (el) { currentIO.observe(el); }
     });
+    if (Object.keys(map).length) { setActive(Object.keys(map)[0]); }
   }
+
+  function activateVersion(idx) {
+    verBtns.forEach(function(b){
+      b.classList.toggle("rn-ver-active", +b.getAttribute("data-idx") === idx);
+    });
+    panels.forEach(function(p){ p.hidden = +p.getAttribute("data-panel") !== idx; });
+    ituLists.forEach(function(ul){ ul.hidden = +ul.getAttribute("data-itu") !== idx; });
+    setupScrollSpy(idx);
+  }
+
+  verBtns.forEach(function(btn){
+    btn.addEventListener("click", function(){ activateVersion(+btn.getAttribute("data-idx")); });
+  });
+  setupScrollSpy(0);
 }());</script>
 </body>
 </html>`;
 }
 
-function renderSidebar(r: Release): string {
-  const items = r.sections
-    .map(s => `<li><a href="#${slug(s.name)}" data-target="${slug(s.name)}">${esc(s.name)}</a></li>`)
-    .join("");
-  return `<div class="rn-sidebar-meta">
-  <span class="rn-version-badge">v${esc(r.version)}</span>
-  <span class="rn-release-date">${esc(r.fmtDate)}</span>
-</div>
-<nav class="rn-toc">
-  <span class="rn-toc-label">In this update</span>
-  <ul>${items}</ul>
-</nav>`;
+// ── version list (column 1) ───────────────────────────────────────────────────
+
+function renderVersionList(releases: Release[]): string {
+  const items = releases.map((r, i) => {
+    const active = i === 0 ? " rn-ver-active" : "";
+    return `<li><button class="rn-ver-btn${active}" data-idx="${i}" type="button">` +
+           `<span class="rn-ver-num">v${esc(r.version)}</span>` +
+           `<span class="rn-ver-date">${esc(r.fmtDate)}</span></button></li>`;
+  }).join("");
+  return `<span class="rn-versions-label">Releases</span><ul class="rn-ver-list">${items}</ul>`;
 }
+
+// ── in this update nav (column 2) ────────────────────────────────────────────
+
+function renderItuNav(releases: Release[]): string {
+  const lists = releases.map((r, i) => {
+    const hiddenAttr = i === 0 ? "" : " hidden";
+    const items = r.sections
+      .map(s => `<li><a href="#${vslug(i, s.name)}" data-target="${vslug(i, s.name)}">${esc(s.name)}</a></li>`)
+      .join("");
+    return `<ul class="rn-itu-list" data-itu="${i}"${hiddenAttr}>${items}</ul>`;
+  }).join("");
+  return `<span class="rn-itu-label">In this update</span>${lists}`;
+}
+
+// ── version content panels (column 3) ────────────────────────────────────────
 
 const SOCIAL_LINKS =
   '<a href="https://www.linkedin.com/in/jeffreybulanadi/">LinkedIn</a>' +
@@ -498,25 +519,27 @@ const SOCIAL_LINKS =
   ' | <a href="https://bsky.app/profile/jeffreybulanadi.bsky.social">Bluesky</a>' +
   ' | <a href="https://learnbeyondbc.com">learnbeyondbc.com</a>';
 
-function renderCurrentMain(r: Release, checked: string, toUri: (rel: string) => string): string {
+function renderVersionPanel(
+  r: Release,
+  idx: number,
+  checked: string | null,
+  toUri: (rel: string) => string,
+): string {
+  const hiddenAttr = idx === 0 ? "" : " hidden";
+  const extra = checked !== null
+    ? `<p class="rn-tagline">Written by a developer, for developers.</p>` +
+      `<p class="rn-date">Released ${esc(r.fmtDate)}</p>` +
+      `<label class="rn-setting"><input type="checkbox" id="chk"${checked}> Show release notes after an update</label>` +
+      `<p class="rn-social">Follow on ${SOCIAL_LINKS}</p>`
+    : `<p class="rn-date">Released ${esc(r.fmtDate)}</p>`;
+  const header   = `<div class="rn-header"><h1>BC Docker Manager ${esc(r.version)}</h1>${extra}<hr></div>`;
   const sections = r.sections
-    .map(s => renderSection(s, toUri))
+    .map(s => `<section id="${vslug(idx, s.name)}">${renderSectionHeading(s.name)}${renderSectionContent(s, toUri)}</section>`)
     .join("");
-
-  return `<div class="rn-header">
-<h1>BC Docker Manager ${esc(r.version)}</h1>
-<p class="rn-tagline">Written by a developer, for developers.</p>
-<p class="rn-date">Released ${esc(r.fmtDate)}</p>
-<label class="rn-setting"><input type="checkbox" id="chk"${checked}> Show release notes after an update</label>
-<p class="rn-social">Follow on ${SOCIAL_LINKS}</p>
-<hr>
-</div>
-${sections}`;
+  return `<div class="rn-version-panel" data-panel="${idx}"${hiddenAttr}>${header}${sections}</div>`;
 }
 
-function renderSection(s: ReleaseSection, toUri: (rel: string) => string): string {
-  return `<section id="${slug(s.name)}">${renderSectionHeading(s.name)}${renderSectionContent(s, toUri)}</section>`;
-}
+// ── section rendering ─────────────────────────────────────────────────────────
 
 function renderSectionHeading(name: string): string {
   return `<div class="rn-section-wrap"><span class="rn-section-label">${esc(name)}</span><span class="rn-section-rule"></span></div>`;
@@ -580,24 +603,11 @@ function renderSectionItems(items: SectionItem[], toUri: (rel: string) => string
   return out.join("");
 }
 
-function renderOlderList(older: Release[], toUri: (rel: string) => string): string {
-  if (!older.length) { return ""; }
-
-  const items = older.map(r => {
-    const sections = r.sections
-      .map(s => renderSectionHeading(s.name) + renderSectionContent(s, toUri))
-      .join("");
-
-    return `<details class="rn-older">
-<summary><span class="rn-older-meta"><span>${esc(r.version)}</span><span class="rn-older-date">${esc(r.fmtDate)}</span></span><span class="rn-chevron">&#8250;</span></summary>
-<div class="rn-older-body">${sections}</div>
-</details>`;
-  }).join("");
-
-  return `<hr><p class="rn-older-label">Previous releases</p>${items}`;
-}
-
 // ── Inline markdown helpers ───────────────────────────────────────────────────
+
+function vslug(idx: number, name: string): string {
+  return `v${idx}-${slug(name)}`;
+}
 
 function esc(s: string): string {
   return s
