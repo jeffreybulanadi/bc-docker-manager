@@ -49,12 +49,12 @@ pre code {
 `;
 
 const PAGE_CSS = `
-/* ── three-column layout ── */
+/* ── two-column layout ── */
 .rn-layout { display: flex; min-height: 100vh; }
 
 /* ── column 1: version list ── */
 .rn-versions {
-  width: 170px; flex-shrink: 0;
+  width: 175px; flex-shrink: 0;
   padding: 28px 0 40px 14px;
   box-sizing: border-box;
   border-right: 1px solid var(--vscode-panel-border, rgba(128,128,128,.12));
@@ -87,42 +87,11 @@ const PAGE_CSS = `
 .rn-ver-btn.rn-ver-active .rn-ver-num { color: var(--vscode-textLink-foreground); }
 .rn-ver-btn.rn-ver-active .rn-ver-date { color: var(--vscode-foreground); opacity: .6; }
 
-/* ── column 2: in this update ── */
-.rn-itu {
-  width: 155px; flex-shrink: 0;
-  padding: 28px 12px 40px 18px;
-  box-sizing: border-box;
-  border-right: 1px solid var(--vscode-panel-border, rgba(128,128,128,.12));
-}
-.rn-itu-inner { position: sticky; top: 28px; }
-.rn-itu-label {
-  display: block;
-  font-size: .7em; font-weight: 700; letter-spacing: .1em;
-  text-transform: uppercase; opacity: .4;
-  margin: 0 0 8px;
-}
-.rn-itu-list { margin: 0; padding: 0; list-style: none; }
-.rn-itu-list li { margin: 2px 0; }
-.rn-itu-list a {
-  display: block; padding: 3px 0 3px 10px;
-  font-size: .86em; text-decoration: none;
-  color: var(--vscode-foreground); opacity: .6;
-  border-left: 2px solid transparent;
-  transition: opacity .15s, color .15s, border-color .15s;
-  line-height: 1.4;
-}
-.rn-itu-list a:hover { opacity: 1; text-decoration: none; }
-.rn-itu-list a[aria-current="true"] {
-  opacity: 1;
-  color: var(--vscode-textLink-foreground);
-  border-left-color: var(--vscode-textLink-foreground);
-}
-
-/* ── column 3: main content ── */
+/* ── column 2: content (header + in-this-update block + sections) ── */
 .rn-main {
   flex: 1; min-width: 0;
   padding: 28px 48px 60px 36px;
-  max-width: 840px;
+  max-width: 880px;
   box-sizing: border-box;
 }
 
@@ -163,6 +132,29 @@ const PAGE_CSS = `
 /* ── social links ── */
 .rn-social { font-size: .82em; opacity: .55; }
 .rn-social a { opacity: 1; }
+
+/* ── in this update block (inline at top of content) ── */
+.rn-itu-block {
+  margin: 0 0 28px;
+  padding: 14px 18px;
+  border: 1px solid var(--vscode-panel-border, rgba(128,128,128,.15));
+  border-radius: 4px;
+  background: var(--vscode-editor-inactiveSelectionBackground, rgba(128,128,128,.04));
+}
+.rn-itu-label {
+  display: block;
+  font-size: .7em; font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase; opacity: .45;
+  margin: 0 0 10px;
+}
+.rn-itu-links { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0; padding: 0; list-style: none; }
+.rn-itu-links a {
+  font-size: .88em; text-decoration: none;
+  color: var(--vscode-textLink-foreground);
+  opacity: .75; transition: opacity .15s;
+}
+.rn-itu-links a:hover { opacity: 1; text-decoration: underline; }
+.rn-itu-links a[aria-current="true"] { opacity: 1; font-weight: 600; }
 
 /* ── section headings ── */
 .rn-section-wrap { display: flex; align-items: center; margin: 2em 0 .75em; }
@@ -217,12 +209,9 @@ a.rn-contributor:hover {
 .rn-figure figcaption { font-size: .8em; opacity: .55; margin-top: 6px; }
 
 /* ── responsive ── */
-@media (max-width: 660px) {
-  .rn-itu { display: none; }
-  .rn-main { padding: 20px 24px 40px; }
-}
-@media (max-width: 420px) {
+@media (max-width: 460px) {
   .rn-versions { display: none; }
+  .rn-main { padding: 20px 20px 40px; }
 }
 `;
 
@@ -408,12 +397,10 @@ function buildHtml(
   let body: string;
   if (releases.length) {
     const verList = renderVersionList(releases);
-    const ituNav  = renderItuNav(releases);
     const panels  = releases
       .map((r, i) => renderVersionPanel(r, i, i === 0 ? checked : null, toUri))
       .join("");
     body = `<aside class="rn-versions"><div class="rn-versions-inner">${verList}</div></aside>` +
-           `<nav class="rn-itu"><div class="rn-itu-inner">${ituNav}</div></nav>` +
            `<main class="rn-main">${panels}</main>`;
   } else {
     body = `<main class="rn-main"><p>No release notes available.</p></main>`;
@@ -442,15 +429,14 @@ ${body}
   }
   var verBtns  = document.querySelectorAll(".rn-ver-btn");
   var panels   = document.querySelectorAll(".rn-version-panel");
-  var ituLists = document.querySelectorAll(".rn-itu-list");
   var currentIO = null;
 
   function setupScrollSpy(idx) {
     if (currentIO) { currentIO.disconnect(); currentIO = null; }
     if (!("IntersectionObserver" in window)) { return; }
-    var activeList = document.querySelector(".rn-itu-list[data-itu='" + idx + "']");
-    if (!activeList) { return; }
-    var tocLinks = activeList.querySelectorAll("a[data-target]");
+    var activePanel = document.querySelector(".rn-version-panel[data-panel='" + idx + "']");
+    if (!activePanel) { return; }
+    var tocLinks = activePanel.querySelectorAll(".rn-itu-links a[data-target]");
     if (!tocLinks.length) { return; }
     var map = Object.create(null);
     tocLinks.forEach(function(l){ map[l.getAttribute("data-target")] = l; });
@@ -473,7 +459,6 @@ ${body}
       b.classList.toggle("rn-ver-active", +b.getAttribute("data-idx") === idx);
     });
     panels.forEach(function(p){ p.hidden = +p.getAttribute("data-panel") !== idx; });
-    ituLists.forEach(function(ul){ ul.hidden = +ul.getAttribute("data-itu") !== idx; });
     setupScrollSpy(idx);
   }
 
@@ -498,20 +483,7 @@ function renderVersionList(releases: Release[]): string {
   return `<span class="rn-versions-label">Releases</span><ul class="rn-ver-list">${items}</ul>`;
 }
 
-// ── in this update nav (column 2) ────────────────────────────────────────────
-
-function renderItuNav(releases: Release[]): string {
-  const lists = releases.map((r, i) => {
-    const hiddenAttr = i === 0 ? "" : " hidden";
-    const items = r.sections
-      .map(s => `<li><a href="#${vslug(i, s.name)}" data-target="${vslug(i, s.name)}">${esc(s.name)}</a></li>`)
-      .join("");
-    return `<ul class="rn-itu-list" data-itu="${i}"${hiddenAttr}>${items}</ul>`;
-  }).join("");
-  return `<span class="rn-itu-label">In this update</span>${lists}`;
-}
-
-// ── version content panels (column 3) ────────────────────────────────────────
+// ── in this update block (inline at top of each version panel) ───────────────
 
 const SOCIAL_LINKS =
   '<a href="https://www.linkedin.com/in/jeffreybulanadi/">LinkedIn</a>' +
@@ -532,11 +504,19 @@ function renderVersionPanel(
       `<label class="rn-setting"><input type="checkbox" id="chk"${checked}> Show release notes after an update</label>` +
       `<p class="rn-social">Follow on ${SOCIAL_LINKS}</p>`
     : `<p class="rn-date">Released ${esc(r.fmtDate)}</p>`;
-  const header   = `<div class="rn-header"><h1>BC Docker Manager ${esc(r.version)}</h1>${extra}<hr></div>`;
+  const header = `<div class="rn-header"><h1>BC Docker Manager ${esc(r.version)}</h1>${extra}<hr></div>`;
+
+  const ituItems = r.sections
+    .map(s => `<li><a href="#${vslug(idx, s.name)}" data-target="${vslug(idx, s.name)}">${esc(s.name)}</a></li>`)
+    .join("");
+  const ituBlock = r.sections.length
+    ? `<div class="rn-itu-block"><span class="rn-itu-label">In this update</span><ul class="rn-itu-links">${ituItems}</ul></div>`
+    : "";
+
   const sections = r.sections
     .map(s => `<section id="${vslug(idx, s.name)}">${renderSectionHeading(s.name)}${renderSectionContent(s, toUri)}</section>`)
     .join("");
-  return `<div class="rn-version-panel" data-panel="${idx}"${hiddenAttr}>${header}${sections}</div>`;
+  return `<div class="rn-version-panel" data-panel="${idx}"${hiddenAttr}>${header}${ituBlock}${sections}</div>`;
 }
 
 // ── section rendering ─────────────────────────────────────────────────────────
