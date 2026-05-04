@@ -1,10 +1,10 @@
 # BC Docker Manager
 
-[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/jeffreybulanadi.bc-docker-manager?label=VS%20Code%20Marketplace&logo=visual-studio-code&color=0078d7)](https://marketplace.visualstudio.com/items?itemName=jeffreybulanadi.bc-docker-manager)
+[![VS Code Marketplace](https://img.shields.io/github/package-json/v/jeffreybulanadi/bc-docker-manager?logo=visual-studio-code&color=0078d7&label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=jeffreybulanadi.bc-docker-manager)
 [![CI](https://github.com/jeffreybulanadi/bc-docker-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/jeffreybulanadi/bc-docker-manager/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-> Manage Business Central Docker containers directly from VS Code. Browse artifacts from the Microsoft CDN, create containers, develop AL apps, and keep your environment healthy -- all from a single sidebar panel.
+> Manage Business Central Docker containers directly from VS Code. Browse artifacts from the Microsoft CDN, create containers, develop AL apps, and keep your environment healthy, with everything accessible from a single sidebar panel.
 
 > **Administrator required.** VS Code must be launched as Administrator. Some operations write to `C:\Windows\System32\drivers\etc\hosts`, install certificates into the Windows Trusted Root store, and interact with Windows optional features. These require elevation.
 
@@ -42,6 +42,7 @@
 - [Troubleshooting](#troubleshooting)
 - [Security and Permissions](#security-and-permissions)
 - [What's New](#whats-new)
+- [Guides and Resources](#guides-and-resources)
 - [Contributing](#contributing)
 - [Telemetry](#telemetry)
 - [License](#license)
@@ -50,13 +51,13 @@
 
 ## Why BC Docker Manager
 
-BC Docker Manager brings the full Business Central Docker workflow into VS Code. Whether you are coming from BcContainerHelper and PowerShell-based automation, or starting fresh with BC development, the extension gives you a guided environment, integrated tooling, and real-time visibility into your containers -- all without leaving the editor.
+BC Docker Manager brings the full Business Central Docker workflow into VS Code. Whether you are coming from BcContainerHelper and PowerShell-based automation, or starting fresh with BC development, the extension gives you a guided environment, integrated tooling, and real-time visibility into your containers, without leaving the editor.
 
 Every action in the sidebar maps to standard `docker` commands. There is no custom daemon, no additional service, and no external module required on the host machine. The extension installs Docker Engine for you if it is not already set up.
 
 **What it brings to your workflow:**
 - A VS Code sidebar that shows your containers, images, and volumes in real time
-- A CDN browser that lists every published BC artifact -- sandbox and on-premises -- with filtering and sorting
+- A CDN browser that lists every published BC artifact, sandbox and on-premises, with filtering and sorting
 - Container creation, networking, licensing, AL compilation, database backup, and more, all from the same panel
 - Persistent tags and notes on containers so you always know which container is which
 - Container profiles that save and restore full configurations across machines
@@ -76,7 +77,7 @@ The extension is tested against Node.js 20 and 22 on every pull request. It has 
 | Hyper-V | Any | The extension can enable this for you. Requires a restart. |
 | Docker Engine | Any current release | The extension can install this for you. Docker Desktop is not required. |
 
-> **Windows Home users:** Hyper-V is not available on Windows Home editions. You need Windows 10 or 11 Pro, Enterprise, or Education -- or Windows Server.
+> **Windows Home users:** Hyper-V is not available on Windows Home editions. You need Windows 10 or 11 Pro, Enterprise, or Education. Windows Server editions are also supported.
 
 ### Quick Start
 
@@ -93,10 +94,10 @@ The extension is tested against Node.js 20 and 22 on every pull request. It has 
 
 The container creation wizard collects four inputs:
 
-1. **Container name** -- A short lowercase name, for example `bc25us`. The name becomes the container's DNS hostname and the CN of its SSL certificate. Uppercase letters are blocked. Underscores trigger a warning because they are not valid in DNS hostnames.
-2. **Username** -- The BC administrator account. Default: `admin`.
-3. **Password** -- The BC administrator password. BC enforces password complexity requirements.
-4. **Accept EULA** -- You must agree to the Microsoft Business Central EULA.
+1. **Container name.** A short lowercase name, for example `bc25us`. The name becomes the container's DNS hostname and the CN of its SSL certificate. Uppercase letters are blocked. Underscores trigger a warning because they are not valid in DNS hostnames.
+2. **Username.** The BC administrator account. Default: `admin`.
+3. **Password.** The BC administrator password. BC enforces password complexity requirements.
+4. **Accept EULA.** You must agree to the Microsoft Business Central EULA.
 
 After you confirm, the extension:
 - Runs `docker run` with your chosen isolation mode, memory limit, and authentication settings
@@ -112,13 +113,13 @@ You can cancel at any time using the **Cancel** button in the progress notificat
 
 ## How It Works
 
-BC Docker Manager is a VS Code extension written in TypeScript. It communicates with Docker by running the `docker` CLI directly -- the same commands you would type in a terminal. There is no custom daemon, no additional service, and no PowerShell module required on the host machine.
+BC Docker Manager is a VS Code extension written in TypeScript. It communicates with Docker by running the `docker` CLI directly, the same commands you would type in a terminal. There is no custom daemon, no additional service, and no PowerShell module required on the host machine.
 
 **Artifact browsing** fetches metadata from the Microsoft BC CDN (`bcartifacts.azureedge.net`) and caches it using a stale-while-revalidate (SWR) strategy. The list is shown immediately from cache while fresh data loads in the background. When the background fetch finishes and the data has changed, the view updates automatically. Cache entries expire after 10 seconds with a small random jitter to spread out concurrent requests.
 
 **Container and image data** is also served from the SWR cache. The sidebar renders in under a millisecond from cache, then refreshes silently. The cache invalidates immediately after any create, start, stop, restart, or remove operation.
 
-**File transfers** (license upload, AL app publish, database backup, database restore) use a single persistent `docker exec` process. The extension opens one long-running PowerShell session inside the container and streams data through a 48 KB sliding window, regardless of file size. An earlier design spawned a new process per 5-50 KB chunk. On a 500 MB database backup that was roughly 10,000 process starts at around 400 ms each -- hours instead of seconds.
+**File transfers** (license upload, AL app publish, database backup, database restore) use a single persistent `docker exec` process. The extension opens one long-running PowerShell session inside the container and streams data through a 48 KB sliding window, regardless of file size. An earlier design spawned a new process per 5-50 KB chunk. On a 500 MB database backup, that came to roughly 10,000 process starts at around 400 ms each: hours instead of seconds.
 
 **Docker CLI calls** that may fail transiently (network blips, Docker daemon startup) are retried with exponential backoff and full jitter. The maximum retry window is bounded to prevent a thundering-herd effect when multiple commands are issued at the same time.
 
@@ -138,14 +139,14 @@ Browse every Business Central artifact published to the Microsoft CDN without le
      Save as: screenshots/artifacts-explorer.png -->
 ![Artifacts Explorer](screenshots/artifacts-explorer.png)
 
-- **Two artifact types** -- Switch between Sandbox and OnPrem using the tabs at the top.
-- **Filter by country** -- Select from the full list of country codes (`us`, `w1`, `de`, `dk`, `nl`, `fr`, `gb`, and more).
-- **Filter by major version** -- Narrow down to a specific BC major release.
-- **Free-text search** -- Type any part of a version string or date to filter inline.
-- **Sortable columns** -- Click any column header to sort by version, country, or date.
-- **Infinite scroll** -- More rows load automatically as you scroll down.
-- **One-click actions** -- Copy the version string, copy the full CDN URL, or start container creation.
-- **CDN health check** -- Run **Test BC Artifacts CDN Connection** from the command palette to verify your network can reach the CDN.
+- **Two artifact types:** Switch between Sandbox and OnPrem using the tabs at the top.
+- **Filter by country:** Select from the full list of country codes (`us`, `w1`, `de`, `dk`, `nl`, `fr`, `gb`, and more).
+- **Filter by major version:** Narrow down to a specific BC major release.
+- **Free-text search:** Type any part of a version string or date to filter inline.
+- **Sortable columns:** Click any column header to sort by version, country, or date.
+- **Infinite scroll:** More rows load automatically as you scroll down.
+- **One-click actions:** Copy the version string, copy the full CDN URL, or start container creation.
+- **CDN health check:** Run **Test BC Artifacts CDN Connection** from the command palette to verify your network can reach the CDN.
 
 #### Container Creation Wizard
 
@@ -175,18 +176,18 @@ All your containers are listed in the **Containers** sidebar panel. Running cont
 | Stop | Click the stop button on a running container, or right-click > Stop Container |
 | Restart | Right-click > Restart Container |
 | Remove | Click the trash button, or right-click > Remove Container |
-| Export | Right-click > Export Container -- saves the container as a `.tar` file |
+| Export | Right-click > Export Container: saves the container as a `.tar` file |
 | Import | Use the toolbar menu at the top of the Containers panel to import a `.tar` file |
 
 #### Quick Access
 
 Click the inline icons on any running container:
 
-- **Open Web Client** -- opens `https://<containername>/BC/` in your browser. Networking (hosts file and SSL certificate) is configured automatically before the browser opens if it has not been set up yet.
-- **Open Terminal** -- opens an interactive PowerShell session inside the running container.
-- **View Logs** -- streams `docker logs --follow` in a VS Code terminal, showing new log lines as they arrive.
-- **Copy IP** -- copies the container's current IP address to your clipboard.
-- **Show Stats** -- opens a live statistics view that updates every 5 seconds.
+- **Open Web Client:** Opens `https://<containername>/BC/` in your browser. Networking (hosts file and SSL certificate) is configured automatically before the browser opens if it has not been set up yet.
+- **Open Terminal:** Opens an interactive PowerShell session inside the running container.
+- **View Logs:** Streams `docker logs --follow` in a VS Code terminal, showing new log lines as they arrive.
+- **Copy IP:** Copies the container's current IP address to your clipboard.
+- **Show Stats:** Opens a live statistics view that updates every 5 seconds.
 
 #### Context Menu
 
@@ -274,7 +275,7 @@ The **Environment** panel checks your system before you start and tells you exac
 | Button | What it does |
 |--------|-------------|
 | Setup Everything | Runs all fixes in the correct order in a single step |
-| Enable Hyper-V and Windows Containers | Runs `Enable-WindowsOptionalFeature -FeatureName Hyper-V, Containers` -- requires a restart |
+| Enable Hyper-V and Windows Containers | Runs `Enable-WindowsOptionalFeature -FeatureName Hyper-V, Containers`, which requires a restart |
 | Install Docker Engine | Downloads the standalone Docker Engine from `download.docker.com` and installs it as a Windows service. Docker Desktop is not required. |
 | Start Docker Engine | Starts the `docker` Windows service if it is installed but stopped |
 
@@ -284,7 +285,7 @@ The **Environment** panel checks your system before you start and tells you exac
 
 ### AL Development
 
-BC Docker Manager works alongside the [AL Language extension](https://marketplace.visualstudio.com/items?itemName=ms-dynamics-smb.al) to speed up AL development. You do not need `alc.exe` installed on your host machine -- the extension uses the copy inside the container.
+BC Docker Manager works alongside the [AL Language extension](https://marketplace.visualstudio.com/items?itemName=ms-dynamics-smb.al) to speed up AL development. You do not need `alc.exe` installed on your host machine; the extension uses the copy inside the container.
 
 #### Generate launch.json
 
@@ -755,13 +756,23 @@ All Docker CLI calls are made to the local Docker Engine over the named pipe `\\
 
 See [CHANGELOG.md](CHANGELOG.md) for the complete release history.
 
-**1.5.1** -- Renamed the "What's New" command to "Show Release Notes" in the Command Palette. Internal architecture improvements: retry with exponential backoff and full jitter on Docker CLI calls, process lifecycle tracking, structured logger with level filtering and automatic telemetry forwarding, centralized configuration service, debounced tree view refresh, and a stale-entry bug fix in the SWR cache.
+**1.5.1:** Renamed the "What's New" command to "Show Release Notes" in the Command Palette. Internal architecture improvements: retry with exponential backoff and full jitter on Docker CLI calls, process lifecycle tracking, structured logger with level filtering and automatic telemetry forwarding, centralized configuration service, debounced tree view refresh, and a stale-entry bug fix in the SWR cache.
 
-**1.5.0** -- Container tags and notes. Container exit diagnostics that show the last 50 log lines when a container stops unexpectedly. Uppercase letters blocked at container naming time to prevent DNS and SSL failures. Release notes panel with automatic opening after each update.
+**1.5.0:** Container tags and notes. Container exit diagnostics that show the last 50 log lines when a container stops unexpectedly. Uppercase letters blocked at container naming time to prevent DNS and SSL failures. Release notes panel with automatic opening after each update.
 
-**1.4.0** -- Edit Container Profile command with pre-filled fields. Streaming file transfer through a single persistent `docker exec` process with a 48 KB window. SQL Server Express edition detection for backup. ANSI escape code stripping from error messages.
+**1.4.0:** Edit Container Profile command with pre-filled fields. Streaming file transfer through a single persistent `docker exec` process with a 48 KB window. SQL Server Express edition detection for backup. ANSI escape code stripping from error messages.
 
-**1.3.0** -- Phase-aware progress during container initialization. Immediate sidebar placeholder before Docker reports the container exists. Cancellation support with automatic container cleanup. Completion notification with quick links to the web client and `launch.json`.
+**1.3.0:** Phase-aware progress during container initialization. Immediate sidebar placeholder before Docker reports the container exists. Cancellation support with automatic container cleanup. Completion notification with quick links to the web client and `launch.json`.
+
+---
+
+## Guides and Resources
+
+The following guides provide hands-on walkthroughs and deeper context for working with BC Docker Manager.
+
+### Getting Started with BC Containers: A Practical Guide
+
+[BC Docker Manager: Easy Containers](https://learnbeyondbc.com/blogs/bc-docker-manager-easy-containers) covers the full journey from running PowerShell scripts manually to having a working container environment inside VS Code. It walks through artifact selection, container creation, and the reasoning behind each design decision in the extension. A good starting point if you want to understand not just what the extension does, but why it works the way it does.
 
 ---
 
@@ -799,7 +810,7 @@ npx jest --coverage
 node esbuild.js
 ```
 
-The extension compiles to `out/extension.js` using esbuild. Tests are colocated with their source files -- for example, `src/docker/dockerService.test.ts` tests `src/docker/dockerService.ts`.
+The extension compiles to `out/extension.js` using esbuild. Tests are colocated with their source files; for example, `src/docker/dockerService.test.ts` tests `src/docker/dockerService.ts`.
 
 ### Project Structure
 
