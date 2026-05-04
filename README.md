@@ -1,11 +1,10 @@
 # BC Docker Manager
 
 [![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/jeffreybulanadi.bc-docker-manager?label=VS%20Code%20Marketplace&logo=visual-studio-code&color=0078d7)](https://marketplace.visualstudio.com/items?itemName=jeffreybulanadi.bc-docker-manager)
-[![Installs](https://img.shields.io/visual-studio-marketplace/i/jeffreybulanadi.bc-docker-manager?color=63ba83)](https://marketplace.visualstudio.com/items?itemName=jeffreybulanadi.bc-docker-manager)
 [![CI](https://github.com/jeffreybulanadi/bc-docker-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/jeffreybulanadi/bc-docker-manager/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-> Manage Business Central Docker containers from inside VS Code. Browse artifacts from the Microsoft CDN, create containers, develop AL apps, and keep your environment healthy -- all without installing BcContainerHelper or Docker Desktop.
+> Manage Business Central Docker containers directly from VS Code. Browse artifacts from the Microsoft CDN, create containers, develop AL apps, and keep your environment healthy -- all from a single sidebar panel.
 
 > **Administrator required.** VS Code must be launched as Administrator. Some operations write to `C:\Windows\System32\drivers\etc\hosts`, install certificates into the Windows Trusted Root store, and interact with Windows optional features. These require elevation.
 
@@ -51,22 +50,16 @@
 
 ## Why BC Docker Manager
 
-Business Central development on Windows typically requires either **BcContainerHelper** (a PowerShell module with many dependencies) or **Docker Desktop** (a paid product for most commercial teams). Both add significant overhead to a developer workstation.
+BC Docker Manager brings the full Business Central Docker workflow into VS Code. Whether you are coming from BcContainerHelper and PowerShell-based automation, or starting fresh with BC development, the extension gives you a guided environment, integrated tooling, and real-time visibility into your containers -- all without leaving the editor.
 
-BC Docker Manager takes a different approach. It calls the Docker Engine directly using the `docker` CLI, without going through BcContainerHelper or Docker Desktop's management layer. You get the same results with fewer moving parts.
+Every action in the sidebar maps to standard `docker` commands. There is no custom daemon, no additional service, and no external module required on the host machine. The extension installs Docker Engine for you if it is not already set up.
 
-**What you avoid:**
-- Installing and maintaining the BcContainerHelper PowerShell module
-- Paying for a Docker Desktop license for commercial use
-- Running Docker Desktop's background services and extra memory overhead
-- Writing PowerShell scripts for every routine container task
-
-**What you get instead:**
+**What it brings to your workflow:**
 - A VS Code sidebar that shows your containers, images, and volumes in real time
 - A CDN browser that lists every published BC artifact -- sandbox and on-premises -- with filtering and sorting
 - Container creation, networking, licensing, AL compilation, database backup, and more, all from the same panel
 - Persistent tags and notes on containers so you always know which container is which
-- Container profiles that save and restore full configurations
+- Container profiles that save and restore full configurations across machines
 
 The extension is tested against Node.js 20 and 22 on every pull request. It has no runtime dependency on PowerShell modules outside the container itself.
 
@@ -220,6 +213,10 @@ Right-click any container to see the full action menu, organized into groups:
 
 Attach tags and notes to any container to keep track of what each one is for. Annotations are stored in VS Code global state and survive container restarts, recreations, and VS Code restarts. They do not depend on Docker labels or container metadata.
 
+<!-- SCREENSHOT: The Containers panel showing a container with both tags and a note visible.
+     Tags should appear inline as "#tag1 #tag2" in the container description row.
+     The right-click context menu should be open, showing "Set Container Tags", "Set Container Note", and "Clear Container Note and Tags".
+     Save as: screenshots/tags/set-notes-and-tags-menu.jpg -->
 ![Container with tags and note set](screenshots/tags/set-notes-and-tags-menu.jpg)
 
 #### Tags
@@ -228,6 +225,8 @@ Right-click any container and choose **Set Container Tags**. Enter a comma-separ
 
 Tags appear inline in the container list as `#client1 #sandbox #v25` so you can identify containers at a glance without hovering.
 
+<!-- SCREENSHOT: The Containers panel with a container showing tags inline in its description row, e.g. "#client1 #sandbox #v25".
+     Save as: screenshots/tags/tags-and-notes-set.jpg -->
 ![Tags shown in container list](screenshots/tags/tags-and-notes-set.jpg)
 
 #### Notes
@@ -236,6 +235,9 @@ Right-click any container and choose **Set Container Note**. Enter any free-text
 
 The note appears at the bottom of the container tooltip when you hover over the container name in the sidebar.
 
+<!-- SCREENSHOT: The VS Code quick input box showing the "Set Container Note" prompt with a text field.
+     Optionally show the container tooltip visible in the background displaying the note.
+     Save as: screenshots/tags/set-notes.jpg -->
 ![Set Container Note menu](screenshots/tags/set-notes.jpg)
 
 #### Clearing Annotations
@@ -296,6 +298,10 @@ The `launch.json` file connects the AL Language extension to a running BC contai
 
 Right-click a running container and choose **Generate AL Launch Configuration**. The file is written to the workspace that is currently open in VS Code. If no workspace is open, you will be asked to select a folder.
 
+<!-- SCREENSHOT: A VS Code workspace with the generated .vscode/launch.json open in the editor,
+     showing the server, port, and container name fields populated.
+     Save as: screenshots/launch-json.png -->
+
 #### Compile AL App
 
 Compile your AL project using `alc.exe` inside the container:
@@ -319,6 +325,10 @@ Deploy a compiled `.app` file directly to a container:
 ### Networking and SSL
 
 BC containers use custom hostnames and self-signed SSL certificates. Browsers reject self-signed certificates by default, and the container hostname does not resolve until it is added to your hosts file. The extension handles both.
+
+<!-- SCREENSHOT: The VS Code notification area showing "Networking setup complete" after running Setup Networking,
+     or the quick pick showing the "Setup Networking", "Update Hosts File", and "Install SSL Certificate" options.
+     Save as: screenshots/networking.png -->
 
 | Command | What it does |
 |---------|-------------|
@@ -357,6 +367,10 @@ Create BC users inside a running container without opening the web client or wri
 
 Backup and restore run through a single persistent streaming connection to the container. There is no temporary file staging on the host; data flows directly through the `docker exec` channel.
 
+<!-- SCREENSHOT: The VS Code output channel showing a backup or restore operation in progress,
+     with log lines showing the streaming progress and completion message.
+     Save as: screenshots/database-backup.png -->
+
 | Command | What it does |
 |---------|-------------|
 | Backup Database | Creates a `.bak` file inside the container using SQL Server's `BACKUP DATABASE` command, then copies it to a path you choose on your machine |
@@ -376,6 +390,9 @@ Backup and restore run through a single persistent streaming connection to the c
 | View Container Logs | Opens a terminal and streams `docker logs --follow` in real time |
 | View Event Log | Retrieves recent Windows Event Log entries from the MicrosoftDynamicsNavServer and MSSQL sources inside the container |
 | Edit NST Settings | Opens the NavServerTier configuration file for the container's BC service tier. You can edit values and optionally restart the service to apply changes. |
+
+<!-- SCREENSHOT: The Show Container Stats webview panel open, showing live CPU, memory, network I/O, and block I/O readings for a running container.
+     Save as: screenshots/container-stats.png -->
 
 **Container exit diagnostics:** If a container stops before BC finishes initializing, the last 50 log lines appear in the output channel immediately. Common causes are listed as a hint: not enough memory, missing license, or incompatible artifact. Networking setup is skipped in this case to avoid misleading error messages.
 
