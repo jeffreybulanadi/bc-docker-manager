@@ -49,43 +49,75 @@ pre code {
 `;
 
 const PAGE_CSS = `
-/* ── two-column layout ── */
+/* ── layout ── */
 .rn-layout { display: flex; min-height: 100vh; }
 .rn-sidebar {
-  width: 200px; flex-shrink: 0;
-  padding: 20px 0 20px 20px;
+  width: 220px; flex-shrink: 0;
+  padding: 28px 12px 40px 20px;
   box-sizing: border-box;
 }
 .rn-main {
   flex: 1; min-width: 0;
-  padding: 20px 40px 40px;
+  padding: 28px 48px 60px 36px;
   max-width: 860px;
   box-sizing: border-box;
 }
 
-/* ── sticky TOC sidebar ── */
-.rn-toc { position: sticky; top: 20px; }
-.rn-toc > p {
-  font-size: .72em; font-weight: 600; opacity: .55;
-  text-transform: uppercase; letter-spacing: .07em;
-  margin: 0 0 10px;
+/* ── sidebar meta (version badge + date) ── */
+.rn-toc { position: sticky; top: 28px; }
+.rn-sidebar-meta { margin-bottom: 16px; }
+.rn-version-badge {
+  display: inline-block;
+  font-size: .75em; font-weight: 700; letter-spacing: .05em;
+  padding: 2px 9px; border-radius: 10px;
+  background: var(--vscode-badge-background, rgba(128,128,128,.18));
+  color: var(--vscode-badge-foreground, var(--vscode-foreground));
+  margin-bottom: 5px;
 }
-.rn-toc > ul { margin: 0; padding: 0; list-style: none; }
-.rn-toc > ul > li { margin: 3px 0; }
+.rn-release-date {
+  display: block;
+  font-size: .78em; opacity: .55;
+}
+
+/* ── TOC nav ── */
+.rn-toc-label {
+  display: block;
+  font-size: .72em; font-weight: 600; opacity: .5;
+  text-transform: uppercase; letter-spacing: .08em;
+  margin: 14px 0 8px;
+}
+.rn-toc ul { margin: 0; padding: 0; list-style: none; }
+.rn-toc ul li { margin: 2px 0; }
 .rn-toc a {
-  text-decoration: none; opacity: .7; font-size: .88em;
-  display: block; padding: 2px 0;
+  text-decoration: none; font-size: .86em;
+  display: block; padding: 3px 0 3px 10px;
   color: var(--vscode-foreground);
+  opacity: .6;
+  border-left: 2px solid transparent;
+  transition: opacity .15s, color .15s, border-color .15s;
+  line-height: 1.4;
 }
-.rn-toc a:hover { opacity: 1; }
+.rn-toc a:hover { opacity: 1; text-decoration: none; }
+.rn-toc a[aria-current="true"] {
+  opacity: 1;
+  color: var(--vscode-textLink-foreground);
+  border-left-color: var(--vscode-textLink-foreground);
+}
 
 /* ── header ── */
-.rn-header h1     { border-bottom: none; padding-bottom: 0; margin-bottom: 4px; font-size: 2em; }
-.rn-tagline       { font-style: italic; opacity: .5; font-size: .88em; margin: 0 0 6px; }
-.rn-date          { opacity: .7; font-size: .9em; margin: 4px 0 0; }
+.rn-header h1 {
+  border-bottom: none; padding-bottom: 0; margin-bottom: 4px;
+  font-size: 1.9em; font-weight: 600;
+}
+.rn-tagline { font-style: italic; opacity: .5; font-size: .88em; margin: 2px 0 10px; }
+.rn-date    { opacity: .6; font-size: .85em; margin: 0 0 14px; }
+.rn-header hr { margin: 18px 0 0; border-bottom-width: 1px; }
 
-/* inline opt-out - matches VS Code's "Show release notes after an update" */
-.rn-setting    { display: inline-flex; align-items: center; gap: 8px; font-size: .9em; cursor: pointer; user-select: none; margin-top: 14px; }
+/* ── checkbox setting ── */
+.rn-setting {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: .9em; cursor: pointer; user-select: none; margin-bottom: 10px;
+}
 .rn-setting input[type=checkbox] {
   appearance: none; -webkit-appearance: none;
   width: 14px; height: 14px; flex-shrink: 0; cursor: pointer; position: relative;
@@ -106,42 +138,110 @@ const PAGE_CSS = `
 .rn-setting input[type=checkbox]:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; }
 
 /* ── social links ── */
-.rn-social { font-size: .85em; opacity: .65; margin-top: 10px; }
+.rn-social { font-size: .82em; opacity: .55; }
 .rn-social a { opacity: 1; }
 
-/* ── highlights / welcome block ── */
-.rn-welcome { margin: 1.5em 0 0; }
-.rn-welcome-intro { margin: 0 0 12px; line-height: 1.6; }
-.rn-highlights { margin: 0 0 12px; padding-left: 20px; }
-.rn-highlights li { margin: 6px 0; line-height: 1.5; }
-.rn-happy-coding { margin: 0 0 1.5em; font-style: italic; opacity: .75; }
+/* ── section heading (small-caps label + horizontal rule) ── */
+.rn-section-wrap {
+  display: flex; align-items: center;
+  margin: 2em 0 .75em;
+}
+.rn-section-label {
+  font-size: .78em; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .08em;
+  opacity: .55; white-space: nowrap;
+}
+.rn-section-rule {
+  flex: 1; height: 1px;
+  background: var(--vscode-panel-border, rgba(128,128,128,.15));
+  margin-left: 12px;
+}
+
+/* ── highlights card grid ── */
+.rn-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  margin: 0 0 1em;
+}
+.rn-card {
+  padding: 14px 16px;
+  border: 1px solid var(--vscode-panel-border, rgba(128,128,128,.18));
+  border-radius: 6px;
+  background: var(--vscode-editor-inactiveSelectionBackground, rgba(128,128,128,.06));
+  line-height: 1.5;
+}
+.rn-card-title {
+  font-weight: 700; font-size: .92em;
+  display: block; margin-bottom: 4px;
+}
+.rn-card-desc { font-size: .88em; opacity: .8; }
+
+/* ── contributor chips ── */
+.rn-contributors { padding: 0; margin: 0; list-style: none; }
+.rn-contributors li { margin: 6px 0; line-height: 1.6; }
+a.rn-contributor {
+  display: inline-block;
+  padding: 1px 10px;
+  border: 1px solid var(--vscode-panel-border, rgba(128,128,128,.3));
+  border-radius: 20px;
+  font-size: .85em;
+  text-decoration: none;
+  color: var(--vscode-foreground);
+  transition: color .15s, border-color .15s;
+  margin-right: 6px;
+}
+a.rn-contributor:hover {
+  color: var(--vscode-textLink-foreground);
+  border-color: var(--vscode-textLink-foreground);
+  text-decoration: none;
+}
+.rn-contributor-desc { font-size: .9em; opacity: .8; }
 
 /* ── screenshots ── */
 .rn-figure { margin: 16px 0; }
 .rn-figure img { border-radius: 4px; max-height: 360px; object-fit: contain; }
-.vscode-light .rn-figure img { box-shadow: 0 1px 4px rgba(0,0,0,.2); }
-.vscode-dark  .rn-figure img { box-shadow: 0 1px 6px rgba(0,0,0,.5); }
-.rn-figure figcaption { font-size: .82em; opacity: .6; margin-top: 5px; }
+.vscode-light .rn-figure img { box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+.vscode-dark  .rn-figure img { box-shadow: 0 2px 12px rgba(0,0,0,.55); }
+.rn-figure figcaption { font-size: .8em; opacity: .55; margin-top: 6px; }
 
 /* ── previous releases ── */
-.rn-older-label { font-size: .82em; opacity: .55; text-transform: uppercase; letter-spacing: .07em; margin: 2.5em 0 8px; }
-details.rn-older { margin: 5px 0; border: 1px solid; border-radius: 3px; }
-.vscode-light details.rn-older { border-color: rgba(0,0,0,.12); }
-.vscode-dark  details.rn-older { border-color: rgba(255,255,255,.12); }
+.rn-older-label {
+  display: block;
+  font-size: .75em; font-weight: 600; opacity: .5;
+  text-transform: uppercase; letter-spacing: .08em;
+  margin: 2.5em 0 10px;
+}
+details.rn-older {
+  margin: 6px 0;
+  border: 1px solid var(--vscode-panel-border, rgba(128,128,128,.18));
+  border-radius: 4px;
+}
 details.rn-older > summary {
-  padding: 9px 16px; cursor: pointer; list-style: none;
+  padding: 10px 16px; cursor: pointer; list-style: none;
   display: flex; justify-content: space-between; align-items: center;
-  user-select: none; font-size: .95em;
+  user-select: none; font-size: .93em;
 }
 details.rn-older > summary::-webkit-details-marker { display: none; }
-.vscode-light details.rn-older > summary { background: rgba(0,0,0,.025); }
-.vscode-dark  details.rn-older > summary { background: rgba(255,255,255,.025); }
-details.rn-older > summary::after       { content: "+"; opacity: .5; margin-left: 8px; }
-details.rn-older[open] > summary::after { content: "-"; }
+.vscode-light details.rn-older > summary { background: rgba(0,0,0,.02); }
+.vscode-dark  details.rn-older > summary { background: rgba(255,255,255,.02); }
+.rn-chevron {
+  display: inline-block; transition: transform .2s;
+  opacity: .4; font-size: .85em; margin-left: 8px;
+}
+details.rn-older[open] .rn-chevron { transform: rotate(90deg); }
 .rn-older-meta { display: flex; align-items: center; gap: 12px; }
-.rn-older-date { opacity: .6; font-size: .85em; }
-.rn-older-body { padding: 2px 20px 16px; }
-.rn-older-body h3 { margin-top: 1.2em; margin-bottom: .5em; font-size: 1em; font-weight: 600 !important; }
+.rn-older-date { opacity: .55; font-size: .82em; }
+.rn-older-body { padding: 4px 20px 18px; }
+.rn-older-body .rn-section-wrap { margin: 1.2em 0 .5em; }
+.rn-older-body .rn-section-label { font-size: .72em; opacity: .45; }
+.rn-older-body .rn-section-rule  { opacity: .6; }
+
+/* ── responsive: hide sidebar below 580px ── */
+@media (max-width: 580px) {
+  .rn-sidebar { display: none; }
+  .rn-main { padding: 20px 20px 40px; }
+}
 `;
 
 // ── Panel ─────────────────────────────────────────────────────────────────────
@@ -348,9 +448,31 @@ ${body}
 </div>
 <script nonce="${nonce}">(function(){
   var api = acquireVsCodeApi();
-  document.getElementById("chk").addEventListener("change", function(e){
-    api.postMessage({ command: "setShowOnUpdate", value: e.target.checked });
-  });
+  var chk = document.getElementById("chk");
+  if (chk) {
+    chk.addEventListener("change", function(e){
+      api.postMessage({ command: "setShowOnUpdate", value: e.target.checked });
+    });
+  }
+  var links = document.querySelectorAll(".rn-toc a[data-target]");
+  if (links.length && "IntersectionObserver" in window) {
+    var map = Object.create(null);
+    links.forEach(function(l){ map[l.getAttribute("data-target")] = l; });
+    var active = null;
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if (e.isIntersecting) {
+          if (active) { active.removeAttribute("aria-current"); }
+          active = map[e.target.id];
+          if (active) { active.setAttribute("aria-current", "true"); }
+        }
+      });
+    }, { rootMargin: "-5% 0px -75% 0px" });
+    Object.keys(map).forEach(function(id){
+      var el = document.getElementById(id);
+      if (el) { io.observe(el); }
+    });
+  }
 }());</script>
 </body>
 </html>`;
@@ -358,9 +480,16 @@ ${body}
 
 function renderSidebar(r: Release): string {
   const items = r.sections
-    .map(s => `<li><a href="#${slug(s.name)}">${esc(s.name)}</a></li>`)
+    .map(s => `<li><a href="#${slug(s.name)}" data-target="${slug(s.name)}">${esc(s.name)}</a></li>`)
     .join("");
-  return `<nav class="rn-toc"><p>In this update</p><ul>${items}</ul></nav>`;
+  return `<div class="rn-sidebar-meta">
+  <span class="rn-version-badge">v${esc(r.version)}</span>
+  <span class="rn-release-date">${esc(r.fmtDate)}</span>
+</div>
+<nav class="rn-toc">
+  <span class="rn-toc-label">In this update</span>
+  <ul>${items}</ul>
+</nav>`;
 }
 
 const SOCIAL_LINKS =
@@ -371,29 +500,65 @@ const SOCIAL_LINKS =
 
 function renderCurrentMain(r: Release, checked: string, toUri: (rel: string) => string): string {
   const sections = r.sections
-    .map(s => {
-      if (s.name.toLowerCase() === "highlights") {
-        const bullets = s.items
-          .filter((item): item is SectionText => item.kind === "text")
-          .map(item => `<li>${inline(item.text)}</li>`)
-          .join("");
-        return `<div id="${slug(s.name)}" class="rn-welcome">
-<p class="rn-welcome-intro">Welcome to <strong>BC Docker Manager ${esc(r.version)}</strong>. Here are the highlights for this release:</p>
-<ul class="rn-highlights">${bullets}</ul>
-<p class="rn-happy-coding">Written by a developer, for developers.</p>
-</div><hr>`;
-      }
-      return `<h2 id="${slug(s.name)}">${esc(s.name)}</h2>${renderSectionItems(s.items, toUri)}`;
-    })
+    .map(s => renderSection(s, toUri))
     .join("");
 
   return `<div class="rn-header">
 <h1>BC Docker Manager ${esc(r.version)}</h1>
-<p class="rn-date">Release date: ${esc(r.fmtDate)}</p>
+<p class="rn-tagline">Written by a developer, for developers.</p>
+<p class="rn-date">Released ${esc(r.fmtDate)}</p>
 <label class="rn-setting"><input type="checkbox" id="chk"${checked}> Show release notes after an update</label>
 <p class="rn-social">Follow on ${SOCIAL_LINKS}</p>
+<hr>
 </div>
 ${sections}`;
+}
+
+function renderSection(s: ReleaseSection, toUri: (rel: string) => string): string {
+  return `<section id="${slug(s.name)}">${renderSectionHeading(s.name)}${renderSectionContent(s, toUri)}</section>`;
+}
+
+function renderSectionHeading(name: string): string {
+  return `<div class="rn-section-wrap"><span class="rn-section-label">${esc(name)}</span><span class="rn-section-rule"></span></div>`;
+}
+
+function renderSectionContent(s: ReleaseSection, toUri: (rel: string) => string): string {
+  if (s.name.toLowerCase() === "highlights") { return renderHighlightsCards(s.items); }
+  if (s.name.toLowerCase() === "thank you")  { return renderContributorChips(s.items); }
+  return renderSectionItems(s.items, toUri);
+}
+
+function parseCard(text: string): { title: string; desc: string } | null {
+  const m = text.match(/^\*\*(.+?)\*\*[:\s]\s*(.+)/);
+  return m ? { title: m[1], desc: m[2] } : null;
+}
+
+function renderHighlightsCards(items: SectionItem[]): string {
+  const cards = items
+    .filter((item): item is SectionText => item.kind === "text")
+    .map(item => {
+      const card = parseCard(item.text);
+      if (card) {
+        return `<div class="rn-card"><span class="rn-card-title">${esc(card.title)}</span><span class="rn-card-desc">${inline(card.desc)}</span></div>`;
+      }
+      return `<div class="rn-card"><span class="rn-card-desc">${inline(item.text)}</span></div>`;
+    })
+    .join("");
+  return `<div class="rn-cards">${cards}</div>`;
+}
+
+function renderContributorChips(items: SectionItem[]): string {
+  const chips = items
+    .filter((item): item is SectionText => item.kind === "text")
+    .map(item => {
+      const m = item.text.match(/^\[(@[^\]]+)\]\(([^)]+)\)\s*-\s*(.+)/);
+      if (m) {
+        return `<li><a class="rn-contributor" href="${esc(m[2])}">${esc(m[1])}</a><span class="rn-contributor-desc">${inline(m[3])}</span></li>`;
+      }
+      return `<li>${inline(item.text)}</li>`;
+    })
+    .join("");
+  return `<ul class="rn-contributors">${chips}</ul>`;
 }
 
 function renderSectionItems(items: SectionItem[], toUri: (rel: string) => string): string {
@@ -420,11 +585,11 @@ function renderOlderList(older: Release[], toUri: (rel: string) => string): stri
 
   const items = older.map(r => {
     const sections = r.sections
-      .map(s => `<h3>${esc(s.name)}</h3>${renderSectionItems(s.items, toUri)}`)
+      .map(s => renderSectionHeading(s.name) + renderSectionContent(s, toUri))
       .join("");
 
     return `<details class="rn-older">
-<summary><span class="rn-older-meta"><span>${esc(r.version)}</span><span class="rn-older-date">${esc(r.fmtDate)}</span></span></summary>
+<summary><span class="rn-older-meta"><span>${esc(r.version)}</span><span class="rn-older-date">${esc(r.fmtDate)}</span></span><span class="rn-chevron">&#8250;</span></summary>
 <div class="rn-older-body">${sections}</div>
 </details>`;
   }).join("");
