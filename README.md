@@ -115,15 +115,15 @@ You can cancel at any time using the **Cancel** button in the progress notificat
 
 BC Docker Manager is a VS Code extension written in TypeScript. It communicates with Docker by running the `docker` CLI directly, the same commands you would type in a terminal. There is no custom daemon, no additional service, and no PowerShell module required on the host machine.
 
-**Artifact browsing** fetches metadata from the Microsoft BC CDN (`bcartifacts.azureedge.net`) and caches it using a stale-while-revalidate (SWR) strategy. The list is shown immediately from cache while fresh data loads in the background. When the background fetch finishes and the data has changed, the view updates automatically. Cache entries expire after 10 seconds with a small random jitter to spread out concurrent requests.
+**Artifact browsing** fetches metadata from the Microsoft BC CDN and caches it locally. The list appears immediately while fresh data loads in the background. When the background fetch finishes and the data has changed, the view updates automatically.
 
-**Container and image data** is also served from the SWR cache. The sidebar renders in under a millisecond from cache, then refreshes silently. The cache invalidates immediately after any create, start, stop, restart, or remove operation.
+**Container and image data** is also served from the local cache. The sidebar renders instantly on repeat access, then refreshes silently. The cache clears immediately after any create, start, stop, restart, or remove operation.
 
-**File transfers** (license upload, AL app publish, database backup, database restore) use a single persistent `docker exec` process. The extension opens one long-running PowerShell session inside the container and streams data through a 48 KB sliding window, regardless of file size. An earlier design spawned a new process per 5-50 KB chunk. On a 500 MB database backup, that came to roughly 10,000 process starts at around 400 ms each: hours instead of seconds.
+**File transfers** (license upload, AL app publish, database backup, database restore) use a persistent connection to the container. The extension streams data continuously regardless of file size. A 500 MB database backup that previously took hours now completes in seconds.
 
-**Docker CLI calls** that may fail transiently (network blips, Docker daemon startup) are retried with exponential backoff and full jitter. The maximum retry window is bounded to prevent a thundering-herd effect when multiple commands are issued at the same time.
+**Docker CLI calls** that may fail transiently (network blips, Docker daemon startup) are retried automatically. The extension waits between attempts and spreads retries to avoid saturating the daemon when multiple commands run at the same time.
 
-**Logging** goes through a shared structured logger. Every message is timestamped and tagged with a severity level (debug, info, warn, error). Error-level messages are forwarded to telemetry automatically. The `BC Docker Manager` output channel is the same channel throughout the extension lifetime.
+**Logging** goes through a shared output channel. Every message is timestamped. Error-level messages are forwarded to telemetry automatically. The `BC Docker Manager` output channel is the same channel throughout the extension lifetime.
 
 ---
 
@@ -756,11 +756,13 @@ All Docker CLI calls are made to the local Docker Engine over the named pipe `\\
 
 See [CHANGELOG.md](CHANGELOG.md) for the complete release history.
 
-**1.5.1:** Renamed the "What's New" command to "Show Release Notes" in the Command Palette. Internal architecture improvements: retry with exponential backoff and full jitter on Docker CLI calls, process lifecycle tracking, structured logger with level filtering and automatic telemetry forwarding, centralized configuration service, debounced tree view refresh, and a stale-entry bug fix in the SWR cache.
+**1.5.2:** Docker Engine installation now uses parallel connections to download the installer, which significantly cuts download time on most networks. The extension falls back to a single connection automatically if the server does not support it.
+
+**1.5.1:** Renamed the "What's New" command to "Show Release Notes" in the Command Palette. Reliability improvements across the extension: commands recover from transient errors automatically, the output channel stays consistent throughout the extension lifetime, and stale data no longer appears briefly in the sidebar after an update.
 
 **1.5.0:** Container tags and notes. Container exit diagnostics that show the last 50 log lines when a container stops unexpectedly. Uppercase letters blocked at container naming time to prevent DNS and SSL failures. Release notes panel with automatic opening after each update.
 
-**1.4.0:** Edit Container Profile command with pre-filled fields. Streaming file transfer through a single persistent `docker exec` process with a 48 KB window. SQL Server Express edition detection for backup. ANSI escape code stripping from error messages.
+**1.4.0:** Edit Container Profile command with pre-filled fields. Fast streaming file transfers (hours to seconds for large files). SQL Server Express edition detection for backup. ANSI escape code stripping from error messages.
 
 **1.3.0:** Phase-aware progress during container initialization. Immediate sidebar placeholder before Docker reports the container exists. Cancellation support with automatic container cleanup. Completion notification with quick links to the web client and `launch.json`.
 

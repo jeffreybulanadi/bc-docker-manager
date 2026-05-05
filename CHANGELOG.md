@@ -7,13 +7,21 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.5.2] - 2026-05-06
+
+### Changed
+
+- Docker Engine installation now downloads the installer using multiple parallel connections. Download time is significantly reduced on most network connections. If the server does not support parallel downloads, the extension falls back to a single connection automatically.
+
+---
+
 ## [1.5.1] - 2026-05-03
 
 ### Changed
 
 - Renamed the "What's New" command to "Show Release Notes" in the Command Palette for clarity. The setting description is updated to match.
 
-- Enhanced internal architecture: retry with exponential backoff and full jitter on all Docker CLI calls, process lifecycle tracking to prevent leaked processes on deactivate, structured output channel logger with level filtering and automatic telemetry forwarding, centralized configuration service, debounced tree view refresh, and fixed a stale-inflight-entry bug in the SWR cache.
+- Improved reliability across the extension. Commands now recover from transient errors automatically. The output channel stays consistent throughout the extension lifetime. Addressed an issue where stale data could appear briefly in the sidebar after an update.
 
 ---
 
@@ -40,13 +48,13 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- Container export no longer fails when the container name contains uppercase letters. Docker requires image repository names to be entirely lowercase. The temporary image tag created during export is now sanitized to lowercase with any non-alphanumeric characters replaced by hyphens before being passed to `docker commit` and `docker save`. Reported by [@PJohnstonSysco](https://github.com/PJohnstonSysco) in [#8](https://github.com/jeffreybulanadi/bc-docker-manager/issues/8).
+- Container export no longer fails when the container name contains uppercase letters. The name used internally during export is now sanitized before being passed to Docker. Reported by [@PJohnstonSysco](https://github.com/PJohnstonSysco) in [#8](https://github.com/jeffreybulanadi/bc-docker-manager/issues/8).
 
-- Container IP detection now probes both the `nat` network (Windows containers) and the `bridge` network (Linux containers) and validates that the result is a well-formed IPv4 address before using it. Previously any non-empty string returned by `docker inspect` was accepted, so daemon warnings like `"invalid IP"` could end up embedded in the certificate download URL and produce a PowerShell URI parse error during networking setup. A generic range-based fallback is tried last if both named networks return no value.
+- Container IP detection now validates the result before using it, preventing malformed values from reaching networking setup. A fallback probe runs if the primary lookup returns nothing.
 
-- Container name input now rejects uppercase letters at creation time. BC uses the container name as a DNS hostname and as the CN of its self-signed SSL certificate. Uppercase letters are not valid in hostnames per RFC 952 and 1123, and using them caused networking setup to fail silently. A warning is shown if the name contains underscores, which are also not valid in DNS hostnames and can break certificate validation.
+- Container name input now rejects uppercase letters at creation time. BC uses the container name as a DNS hostname and as the CN of its self-signed SSL certificate. Uppercase letters are not valid in hostnames per RFC 952 and 1123 and caused networking setup to fail silently. A warning is shown if the name contains underscores, which can also break certificate validation.
 
-- When a container stops or dies before BC finishes initializing, the creation flow now shows the last 50 lines of container logs in the output channel so the cause is visible immediately. Common reasons (not enough memory, missing license, incompatible artifact) are listed as a hint. Networking setup is skipped entirely in this case instead of attempting it and producing a misleading "Cannot determine IP" error. A timeout (container still running but BC not yet healthy) continues to attempt networking as before.
+- When a container stops before BC finishes initializing, the last 50 lines of container logs appear in the output channel immediately. Common causes such as insufficient memory, a missing license, or an incompatible artifact are listed as a hint. Networking setup is skipped in this case to avoid a misleading "Cannot determine IP" error.
 
 ### Thank you
 
@@ -67,13 +75,13 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- Load Container Profile now writes the stored values back to VS Code user settings immediately when you select a profile. Previously the profile was returned but the values were never applied, so loading a profile had no visible effect. Memory limit, isolation, auth, DNS, and country are all written on load. Country is only written when the profile includes one, to avoid clearing an existing country preference unintentionally.
+- Load Container Profile now applies all stored values to VS Code settings immediately when you select a profile. Previously loading a profile had no visible effect. Country is only written when the profile includes one, to avoid clearing an existing preference unintentionally.
 
-- All file transfers between the host and Hyper-V containers now go through a single persistent `docker exec` spawn instead of spawning a new PowerShell process per chunk. License upload, app publish, database backup, database restore, and AL compilation previously opened one process every 5-50 KB of data. On a 500 MB backup that was roughly 10,000 process starts at ~400 ms each. The transfer now streams through one long-lived process, keeping a 48 KB sliding window in memory regardless of file size, and completes in seconds rather than hours. Reported by [@kennetlindberg](https://github.com/kennetlindberg) in [#6](https://github.com/jeffreybulanadi/bc-docker-manager/issues/6).
+- File transfers between the host and containers are now significantly faster, particularly for Hyper-V containers. License upload, app publish, database backup, restore, and AL compilation all benefit. A 500 MB backup that previously took hours now completes in seconds. Reported by [@kennetlindberg](https://github.com/kennetlindberg) in [#6](https://github.com/jeffreybulanadi/bc-docker-manager/issues/6).
 
-- SQL Server Express edition is now detected automatically before each backup attempt. When Express is detected, the `COMPRESSION` option is omitted from the `BACKUP DATABASE` statement. Previously the command failed with `BACKUP DATABASE WITH COMPRESSION is not supported on Express`, requiring the user to switch editions manually.
+- SQL Server Express edition is now detected automatically before each backup. When Express is detected, the backup command is adjusted accordingly to prevent the failure that occurred on Express installations.
 
-- PowerShell ANSI color escape sequences are stripped from error messages before they are shown in VS Code notifications. The raw terminal codes were leaking into toasts and output channel messages as garbled characters.
+- Error messages no longer contain garbled characters from terminal color codes. These are now stripped before messages are shown in VS Code notifications and the output channel.
 
 ### Thank you
 
@@ -86,9 +94,9 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- Changing country while a specific BC major version (e.g. BC25) was selected showed 0 results. The filter state was reset on country change but the major dropdown kept its previous selection, causing the client-side major filter to exclude all rows returned by the unfiltered `getLatestVersions` fetch (which returns the most recent N versions, typically a different major). The extension now passes the selected major with the country-change request and fetches `getMajorVersions` and `getVersionsByMajor` in parallel, returning the major-specific results directly. If the selected major has no releases in the new country, the extension sends a `majorNotFound` signal so the frontend resets the filter to show all versions.
-- Changing the artifact tab (Sandbox vs OnPrem) while a major was selected could produce 0 results for the same reason. The tab change handler now resets the major dropdown to "All" before loading, since a tab switch is an explicit context change rather than a cross-country comparison.
-- Country dropdown was rebuilt from scratch on every `countries` message without restoring the previously selected value. The selection is now preserved using the same pattern as the major dropdown.
+- Changing country while a specific BC major version was selected now returns the correct results instead of showing 0 rows. If the selected major has no releases for the new country, the filter resets to show all versions automatically.
+- Changing the artifact tab (Sandbox vs OnPrem) while a major version was selected could show 0 results. The major filter now resets when switching tabs.
+- The country dropdown now restores the previously selected value when the list is refreshed.
 
 ---
 
@@ -104,17 +112,16 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - Completion toast with quick actions. When initialization finishes, a notification appears with two buttons: "Open BC Web Client" opens the BC login page directly, and "Generate launch.json" creates the AL project configuration.
 
 ### Changed
-- Container initialization progress is now driven by the phase-change callback (`onPhase`) instead of a fixed 30-second interval. The sidebar and notification update every time a new phase is detected in the container logs, so progress is shown as fast as the container reports it.
+- Container initialization progress updates respond to state changes as they happen rather than on a fixed polling interval.
 
 ---
 
 ## [1.2.2] - 2026-04-30
 
-### Fixed
-- Containers created via the extension were not visible when the BC filter was active. The filter used an exclusive fallback: it checked Docker labels (`nav`, `maintainer`) first, and only fell back to the image-name heuristic when zero labelled containers existed. Containers created by this extension use the generic `mcr.microsoft.com/businesscentral:ltsc2022` base image, which carries no labels until BC finishes initialisation. If any other labelled BC container was already running, the new container was silently excluded from the BC view. Reported by [@omerfaruknav](https://github.com/omerfaruknav) in [#5](https://github.com/jeffreybulanadi/bc-docker-manager/issues/5), confirmed by [@kennetlindberg](https://github.com/kennetlindberg).
-- The filter is now inclusive: all three signals (label `nav`, label `maintainer=Dynamics SMB`, image-name heuristic) are evaluated in a single O(n) pass. A container matching any one signal appears in the BC view.
-- The `docker run` command now stamps `--label nav=extension-created` on every container created by the extension so it is recognised immediately, even before BC initialisation completes.
-- The container tree now refreshes 5 seconds after creation starts (so the container appears while BC is still initialising), then every 30 seconds throughout the initialisation process so the tree stays current. Previously the tree only refreshed after BC was fully ready (5-15 minutes later).
+### Changed
+- Containers created via the extension were not visible when the BC filter was active if another labelled BC container was already running. Reported by [@omerfaruknav](https://github.com/omerfaruknav) in [#5](https://github.com/jeffreybulanadi/bc-docker-manager/issues/5), confirmed by [@kennetlindberg](https://github.com/kennetlindberg).
+- The BC filter now correctly catches all BC containers regardless of when labels are applied.
+- The container tree refreshes shortly after creation starts so the new container appears in the sidebar while BC is still initializing, not only after BC is fully ready.
 
 ### Thank you
 
@@ -143,15 +150,12 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - Globe and Refresh icon buttons in the BC Artifacts section title bar for quick access and panel reload.
 
 ### Improved
-- **Halved Docker CLI calls per tree refresh**: `getBcContainers()` now reuses the already-fetched container list instead of issuing a second `docker ps` + `docker inspect` pair. Two round-trips became one.
-- **Volume SWR cache (30 s TTL)**: `getVolumes()` now returns cached data on rapid refreshes instead of querying Docker on every panel repaint. Cache is invalidated immediately after create/remove operations.
-- **NAV exec split**: `execInContainer()` (utility PowerShell commands like `Test-Path`, `Remove-Item`, `Invoke-Sqlcmd`) no longer prepends the `NavAdminTool.ps1` wildcard import. A new `execNavInContainer()` carries that cost only for commands that actually need NAV cmdlets.
-- **CDN URL constant**: `bcArtifactsService` now uses the `CDN_BASE` constant in `_parseVersions()`. Previously the URL was duplicated inline, which would silently break artifact URLs if the CDN endpoint ever changed.
-- **O(1) pending-write cleanup**: `_pendingWrites` upgraded from `Array` (O(n) filter on completion) to `Set` (O(1) delete).
+- Container tree refreshes are faster and more responsive. Results are served from cache on repeat reads and updated in the background automatically.
+- Volume picker opens instantly on repeat access.
+- NAV and BC container commands are routed correctly based on container type.
+- Version list lookups are consolidated to reduce redundant network calls.
+- Resources held by the extension are released properly when VS Code closes or the extension is deactivated.
 - **Artifacts Explorer auto-open**: the panel now opens automatically only on first install, not on every VS Code launch.
-
-### Fixed
-- `DockerService` EventEmitter was not disposed on extension deactivation. It is now registered in `context.subscriptions` via `implements vscode.Disposable`.
 
 ---
 
@@ -174,7 +178,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Initial public release.
-- BC Artifacts Explorer webview: browse, filter, and pull BC container images without BcContainerHelper.
+- BC Artifacts Explorer webview: browse, filter, and pull BC container images.
 - Container management tree view: start, stop, restart, and remove containers.
 - Image management: pull BC images, pre-pull with progress, remove images.
 - Volume management: create, remove, and inspect Docker volumes.
