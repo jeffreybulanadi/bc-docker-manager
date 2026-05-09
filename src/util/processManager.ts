@@ -85,8 +85,14 @@ export class ProcessManager {
         if (code === 0) {
           resolve(Buffer.concat(stdoutChunks).toString("utf8"));
         } else {
+          const stdout = Buffer.concat(stdoutChunks).toString("utf8").trim();
+          // Docker on Windows and PowerShell both write diagnostic detail to
+          // stdout in some failure modes. Include both streams so callers always
+          // have actionable context. Exit code is always appended so callers
+          // can pattern-match on it (e.g. 255 = container not running).
           const stderr = Buffer.concat(stderrChunks).toString("utf8").trim();
-          reject(new Error(stderr || `Process "${command}" exited with code ${code}`));
+          const body = [stderr, stdout].filter(Boolean).join("\n");
+          reject(new Error(body ? `${body} (exit ${code})` : `Process "${command}" exited with code ${code}`));
         }
       });
 

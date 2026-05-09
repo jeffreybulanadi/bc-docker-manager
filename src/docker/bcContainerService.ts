@@ -26,13 +26,22 @@ const FILE_TRANSFER_CHUNK = 49_152;
 const FILE_TRANSFER_TIMEOUT_MS = 1_800_000;
 
 /**
- * Import the NAV/BC management module inside the container.
- * Required because we use `-NoProfile` to avoid slow profile loading
- * and unpredictable stdout. Covers both legacy NAV and modern BC paths.
+ * Bootstrap the NAV/BC management module inside the container.
+ *
+ * Sources ServiceSettings.ps1 first so $ServerInstance and $serviceTierFolder
+ * are available, then imports the pure-PowerShell .psm1 directly. This avoids
+ * the NavAdminTool.ps1 stub which in BC 29 dot-sources Admin\NavAdminTool.ps1
+ * with an inherited $PSScriptRoot, causing the .NET 10 management DLL to load
+ * and crash the host pwsh process (exit 255, zero output).
+ *
+ * Always paired with Windows PowerShell 5.x (powershell). PS7 is intentionally
+ * avoided: BC 29 insider builds target .NET 10 and abort pwsh on module load.
  */
 const NAV_MODULE_IMPORT =
-  "$navModule = Get-ChildItem 'C:\\Program Files\\Microsoft Dynamics*\\*\\Service\\NavAdminTool.ps1' -ErrorAction SilentlyContinue | Select-Object -First 1; " +
-  "if ($navModule) { Import-Module $navModule.FullName -DisableNameChecking -ErrorAction SilentlyContinue }; ";
+  ". 'C:\\Run\\ServiceSettings.ps1' *>&1 | Out-Null; " +
+  "$_psm1 = (Get-ChildItem 'C:\\Program Files\\Microsoft Dynamics*\\*\\Service\\Microsoft.Dynamics.Nav.Management.psm1' " +
+  "-ErrorAction SilentlyContinue | Select-Object -First 1).FullName; " +
+  "if ($_psm1) { Import-Module $_psm1 -DisableNameChecking -ErrorAction SilentlyContinue }; ";
 
 // ────────────────────────── Service ────────────────────────────
 
@@ -97,30 +106,78 @@ export class BcContainerService {
     psCommand: string,
     timeoutMs = EXEC_TIMEOUT_MS,
   ): Promise<string> {
-    return withRetry(
-      () => this._processManager.exec(
-        "docker",
-        ["exec", containerName, "powershell", "-NoProfile", "-Command", psCommand],
-        { timeoutMs, maxBufferBytes: 10 * 1024 * 1024 },
-      ),
-      { maxAttempts: 2, retryable: isTransientDockerError },
-    );
+    try {
+      return await withRetry(
+        () => this._processManager.exec(
+          "docker",
+          ["exec", containerName, "powershell", "-NoProfile", "-Command", psCommand],
+          { timeoutMs, maxBufferBytes: 10 * 1024 * 1024 },
+        ),
+        { maxAttempts: 2, retryable: isTransientDockerError },
+      );
+    } catch (err) {
+      throw BcContainerService.wrapExecError(err, containerName);
+    }
   }
 
-  /** Run a NAV/BC PowerShell cmdlet inside a container (imports NavAdminTool). */
+  /**
+   * Run a NAV/BC PowerShell cmdlet inside a container (imports management module).
+   *
+   * Always uses Windows PowerShell 5.x (powershell). pwsh / PS7 is intentionally
+   * avoided: BC 29 ships a management DLL targeting .NET 10 that aborts the pwsh
+   * process with exit 255 before producing any output. PS5 loads the pure-PowerShell
+   * .psm1 path instead, which works across all BC versions.
+   */
   private async execNavInContainer(
     containerName: string,
     psCommand: string,
     timeoutMs = EXEC_TIMEOUT_MS,
   ): Promise<string> {
-    return withRetry(
-      () => this._processManager.exec(
-        "docker",
-        ["exec", containerName, "powershell", "-NoProfile", "-Command", NAV_MODULE_IMPORT + psCommand],
-        { timeoutMs, maxBufferBytes: 10 * 1024 * 1024 },
-      ),
-      { maxAttempts: 2, retryable: isTransientDockerError },
-    );
+    await this._assertContainerRunning(containerName);
+    try {
+      return await withRetry(
+        () => this._processManager.exec(
+          "docker",
+          ["exec", containerName, "powershell", "-NoProfile", "-Command", NAV_MODULE_IMPORT + psCommand],
+          { timeoutMs, maxBufferBytes: 10 * 1024 * 1024 },
+        ),
+        { maxAttempts: 2, retryable: isTransientDockerError },
+      );
+    } catch (err) {
+      throw BcContainerService.wrapExecError(err, containerName);
+    }
+  }
+
+  /**
+   * Translate a raw process error into a user-readable message.
+   *
+   * Only "no such container" is a Docker-daemon-specific phrase that
+   * unambiguously indicates a missing container. Container running-state is
+   * verified via `docker inspect` in _assertContainerRunning before exec
+   * is attempted.
+   */
+  private static wrapExecError(err: unknown, containerName: string): Error {
+    if (!(err instanceof Error)) { return new Error(String(err)); }
+    const msg = err.message;
+    if (/no such container/i.test(msg)) {
+      return new Error(`Container "${containerName}" does not exist. Create it first.`);
+    }
+    return new Error(BcContainerService.cleanPsError(msg) || msg);
+  }
+
+  /**
+   * Probe the container to verify it is in the running state before attempting
+   * a NAV admin exec. Uses `docker inspect` so Hyper-V containers with transient
+   * exit-255 on first exec still get a clear "not running" message.
+   */
+  private async _assertContainerRunning(containerName: string): Promise<void> {
+    const state = await this._run(
+      ["inspect", "--format", "{{.State.Running}}", containerName],
+      5_000,
+    ).catch(() => "false");
+    if (state.trim() !== "true") {
+      throw new Error(`Container "${containerName}" is not running. Start it and try again.`);
+    }
   }
 
   /** Escape single quotes in a path for use inside a PowerShell single-quoted string. */
