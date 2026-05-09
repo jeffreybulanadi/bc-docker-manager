@@ -7,6 +7,18 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.5.3] - 2026-05-10
+
+### Fixed
+
+- License upload now works correctly across all supported container images. Certain container images load their administration tools differently from what the extension expected, which caused the upload to fail with a cryptic error or no message at all. The extension now uses a loading approach that works regardless of how the container image is structured internally.
+
+- When you try to upload a license to a container that is not running, the error now clearly says "Container is not running. Start it and try again." instead of showing a raw exit code or an empty failure.
+
+- Error messages from failed commands now include the full output from the operation, not just the error stream. Some container operations write important diagnostic information to the standard output rather than the error output. Both are now captured and shown in the output channel so you can see what actually happened.
+
+---
+
 ## [1.5.2] - 2026-05-06
 
 ### Changed

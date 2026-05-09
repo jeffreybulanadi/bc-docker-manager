@@ -349,22 +349,25 @@ describe("getContainerInfo", () => {
   });
 
   it("fetches and returns parsed info on first call", async () => {
+    fakeSpawnOk("true"); // docker inspect: container running
     fakeSpawnOk(infoJson);
     const result = await (svc as any).getContainerInfo("mybc");
     expect(result).toEqual({ serverInstance: "NAV", dbName: "MyDB" });
-    expect(mockSpawn).toHaveBeenCalledTimes(1);
+    expect(mockSpawn).toHaveBeenCalledTimes(2);
   });
 
   it("returns cached result on second call within TTL", async () => {
+    fakeSpawnOk("true"); // docker inspect: container running
     fakeSpawnOk(infoJson);
     await (svc as any).getContainerInfo("mybc");
     const result = await (svc as any).getContainerInfo("mybc");
     expect(result).toEqual({ serverInstance: "NAV", dbName: "MyDB" });
-    // spawn should only be called once - second call uses cache
-    expect(mockSpawn).toHaveBeenCalledTimes(1);
+    // inspect + data on first call; second call hits cache
+    expect(mockSpawn).toHaveBeenCalledTimes(2);
   });
 
   it("re-fetches after TTL expires", async () => {
+    fakeSpawnOk("true"); // docker inspect for first fetch
     fakeSpawnOk(infoJson);
     await (svc as any).getContainerInfo("mybc");
 
@@ -377,10 +380,11 @@ describe("getContainerInfo", () => {
       ServerInstance: "BC2",
       DatabaseName: "CronusNew",
     });
+    fakeSpawnOk("true"); // docker inspect for re-fetch
     fakeSpawnOk(updatedJson);
     const result = await (svc as any).getContainerInfo("mybc");
     expect(result).toEqual({ serverInstance: "BC2", dbName: "CronusNew" });
-    expect(mockSpawn).toHaveBeenCalledTimes(2);
+    expect(mockSpawn).toHaveBeenCalledTimes(4);
   });
 
   it("returns defaults on error", async () => {
@@ -390,19 +394,22 @@ describe("getContainerInfo", () => {
   });
 
   it("returns defaults when JSON is invalid", async () => {
+    fakeSpawnOk("true"); // docker inspect: container running
     fakeSpawnOk("not valid json");
     const result = await (svc as any).getContainerInfo("badjson");
     expect(result).toEqual({ serverInstance: "BC", dbName: "CRONUS" });
   });
 
   it("caches separate entries per container", async () => {
+    fakeSpawnOk("true"); // docker inspect for c1
     fakeSpawnOk(JSON.stringify({ ServerInstance: "S1", DatabaseName: "D1" }));
+    fakeSpawnOk("true"); // docker inspect for c2
     fakeSpawnOk(JSON.stringify({ ServerInstance: "S2", DatabaseName: "D2" }));
     const r1 = await (svc as any).getContainerInfo("c1");
     const r2 = await (svc as any).getContainerInfo("c2");
     expect(r1.serverInstance).toBe("S1");
     expect(r2.serverInstance).toBe("S2");
-    expect(mockSpawn).toHaveBeenCalledTimes(2);
+    expect(mockSpawn).toHaveBeenCalledTimes(4);
   });
 });
 
@@ -410,12 +417,14 @@ describe("getContainerInfo", () => {
 
 describe("getServerInstance / getDatabaseName", () => {
   it("getServerInstance delegates to getContainerInfo", async () => {
+    fakeSpawnOk("true"); // docker inspect: container running
     fakeSpawnOk(JSON.stringify({ ServerInstance: "NAV", DatabaseName: "DB1" }));
     const si = await (svc as any).getServerInstance("mybc");
     expect(si).toBe("NAV");
   });
 
   it("getDatabaseName delegates to getContainerInfo", async () => {
+    fakeSpawnOk("true"); // docker inspect: container running
     fakeSpawnOk(JSON.stringify({ ServerInstance: "NAV", DatabaseName: "DB1" }));
     const db = await (svc as any).getDatabaseName("mybc");
     expect(db).toBe("DB1");
