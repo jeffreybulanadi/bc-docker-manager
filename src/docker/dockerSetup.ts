@@ -284,7 +284,72 @@ Write-Host "Latest Docker Engine version: $tag"
 $url = "https://download.docker.com/win/static/stable/x86_64/docker-$tag.zip"
 Write-Host "Downloading $url ..."
 $zipFile = Join-Path ([IO.Path]::GetTempPath()) "docker-$tag.zip"
-Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $zipFile
+
+# Attempt parallel chunked download; fall back to single stream if unsupported.
+$parallelOk = $false
+try {
+    $probe = [System.Net.HttpWebRequest]::Create($url)
+    $probe.Method = 'HEAD'
+    $probe.Timeout = 15000
+    $probeResp = $probe.GetResponse()
+    $acceptRanges = $probeResp.GetResponseHeader('Accept-Ranges')
+    $contentLength = $probeResp.ContentLength
+    $probeResp.Close()
+
+    if ($acceptRanges -eq 'bytes' -and $contentLength -gt 41943040) {
+        $streamCount = 8
+        $chunkSize = [math]::Ceiling($contentLength / $streamCount)
+        $jobs = @()
+        for ($idx = 0; $idx -lt $streamCount; $idx++) {
+            $byteStart = $idx * $chunkSize
+            $byteEnd   = [math]::Min($byteStart + $chunkSize - 1, $contentLength - 1)
+            $partPath  = "$zipFile.part$idx"
+            $jobs += Start-Job -ScriptBlock {
+                param($dlUrl, $dlStart, $dlEnd, $dlPath)
+                $req = [System.Net.HttpWebRequest]::Create($dlUrl)
+                $req.AddRange($dlStart, $dlEnd)
+                $req.Timeout = 300000
+                $resp = $req.GetResponse()
+                $src  = $resp.GetResponseStream()
+                $dest = [System.IO.FileStream]::new($dlPath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write)
+                $buf  = New-Object byte[] 65536
+                while (($read = $src.Read($buf, 0, $buf.Length)) -gt 0) { $dest.Write($buf, 0, $read) }
+                $dest.Close()
+                $src.Close()
+                $resp.Close()
+            } -ArgumentList $url, $byteStart, $byteEnd, $partPath
+        }
+
+        Wait-Job -Job $jobs -Timeout 300 | Out-Null
+        $badJobs = @($jobs | Where-Object { $_.State -ne 'Completed' })
+
+        if ($badJobs.Count -gt 0) {
+            $jobs | Remove-Job -Force
+            0..($streamCount - 1) | ForEach-Object { $p = "$zipFile.part$_"; if (Test-Path $p) { Remove-Item $p -Force } }
+            Write-Host 'Parallel download incomplete; retrying with single stream...'
+        } else {
+            $jobs | Remove-Job -Force
+            $dest = [System.IO.FileStream]::new($zipFile, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write)
+            $buf  = New-Object byte[] 65536
+            for ($idx = 0; $idx -lt $streamCount; $idx++) {
+                $partPath = "$zipFile.part$idx"
+                $src = [System.IO.FileStream]::new($partPath, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read)
+                while (($read = $src.Read($buf, 0, $buf.Length)) -gt 0) { $dest.Write($buf, 0, $read) }
+                $src.Close()
+                Remove-Item $partPath -Force
+            }
+            $dest.Close()
+            Write-Host 'Parallel download complete.'
+            $parallelOk = $true
+        }
+    }
+} catch {
+    Write-Host "Parallel probe failed: $_. Falling back to single stream."
+}
+
+if (-not $parallelOk) {
+    Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $zipFile
+}
 
 # ── Step 4: Extract to Program Files ──
 Write-Host 'Extracting...'
