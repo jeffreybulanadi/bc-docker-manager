@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["jest", "node"],
+    "noEmit": true
+  },
+  "include": ["src/**/*.test.ts", "src/vscode-mock.ts"],
+  "exclude": ["node_modules"]
+}

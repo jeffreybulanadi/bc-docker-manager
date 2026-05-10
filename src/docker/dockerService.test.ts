@@ -789,6 +789,9 @@ describe("DockerService.parseInitPhase", () => {
   });
 });
 
+// ─── buildRunArgs (private, accessed via `any`) ───────────────────
+
+describe("DockerService.buildRunArgs", () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const svc = new DockerService() as any;
 

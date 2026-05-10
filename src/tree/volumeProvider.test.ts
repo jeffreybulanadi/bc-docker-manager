@@ -47,7 +47,7 @@ describe("VolumeTreeItem", () => {
     const item = new VolumeTreeItem(makeVolume());
 
     expect(item.iconPath).toBeDefined();
-    expect(item.iconPath.id).toBe("database");
+    expect((item.iconPath as { id: string }).id).toBe("database");
   });
 
   it("sets description to driver name", () => {
@@ -65,7 +65,7 @@ describe("VolumeTreeItem", () => {
     const item = new VolumeTreeItem(vol);
 
     expect(item.tooltip).toBeDefined();
-    const md = item.tooltip.value as string;
+    const md = (item.tooltip as { value: string }).value;
     expect(md).toContain("**my-vol**");
     expect(md).toContain("local");
     expect(md).toContain("/mnt/data");
@@ -75,7 +75,7 @@ describe("VolumeTreeItem", () => {
     const vol = makeVolume({ mountpoint: "" });
     const item = new VolumeTreeItem(vol);
 
-    const md = item.tooltip.value as string;
+    const md = (item.tooltip as { value: string }).value;
     expect(md).toContain("N/A");
   });
 });
