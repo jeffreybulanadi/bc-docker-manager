@@ -69,7 +69,7 @@ function getPostedMessages(): Record<string, unknown>[] {
   const mock = (vscode.window.createWebviewPanel as jest.Mock);
   const panelMock = mock.mock.results[mock.mock.results.length - 1]?.value;
   return (panelMock?.webview?.postMessage as jest.Mock)?.mock?.calls?.map(
-    (c: unknown[]) => c[0],
+    (c: unknown[]) => c[0] as Record<string, unknown>,
   ) ?? [];
 }
 

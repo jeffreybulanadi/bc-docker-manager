@@ -50,7 +50,7 @@ describe("ContainerProvider.getChildren", () => {
 
     expect(children).toHaveLength(1);
     expect(children[0]).toBeInstanceOf(ContainerTreeItem);
-    expect(children[0].container).toEqual(sampleContainer);
+    expect((children[0] as ContainerTreeItem).container).toEqual(sampleContainer);
   });
 
   it("returns empty array when docker returns empty list", async () => {
@@ -202,7 +202,7 @@ describe("ContainerProvider.getChildren - multiple containers", () => {
     expect(children).toHaveLength(3);
     children.forEach((child, i) => {
       expect(child).toBeInstanceOf(ContainerTreeItem);
-      expect(child.container).toEqual(containers[i]);
+      expect((child as ContainerTreeItem).container).toEqual(containers[i]);
     });
   });
 });
