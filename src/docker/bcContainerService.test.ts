@@ -16,7 +16,13 @@ import { exec, spawn } from "child_process";
 import { EventEmitter } from "events";
 import * as fs from "fs";
 import * as vscode from "vscode";
-import { BcContainerService } from "./bcContainerService";
+import { ProcessCancelledError, ProcessTimeoutError } from "../util/processManager";
+import {
+  APP_DEPLOYMENT_TIMEOUT_SETTING,
+  AppDeploymentTimeoutError,
+  BcContainerService,
+  getAppDeploymentTimeoutMs,
+} from "./bcContainerService";
 
 jest.mock("child_process", () => ({
   exec: jest.fn(),
@@ -1102,5 +1108,103 @@ describe("importContainer", () => {
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
       expect.stringContaining("imported"),
     );
+  });
+});
+
+// ─── App deployment timeout resolution ───────────────────────────
+
+describe("getAppDeploymentTimeoutMs", () => {
+  /** Point the shared configuration mock at a specific stored value. */
+  function configureMinutes(value: unknown) {
+    (vscode.workspace.getConfiguration("bcDockerManager").get as jest.Mock)
+      .mockReturnValueOnce(value);
+  }
+
+  it("defaults to 60 minutes when the setting is unset", () => {
+    configureMinutes(undefined);
+    expect(getAppDeploymentTimeoutMs()).toBe(3_600_000);
+  });
+
+  it("uses the configured value", () => {
+    configureMinutes(90);
+    expect(getAppDeploymentTimeoutMs()).toBe(5_400_000);
+  });
+
+  it("rounds fractional minutes to whole milliseconds", () => {
+    configureMinutes(1.5);
+    expect(getAppDeploymentTimeoutMs()).toBe(90_000);
+  });
+
+  it("clamps values below the minimum", () => {
+    configureMinutes(0);
+    expect(getAppDeploymentTimeoutMs()).toBe(60_000);
+  });
+
+  it("clamps values above the maximum", () => {
+    configureMinutes(10_000);
+    expect(getAppDeploymentTimeoutMs()).toBe(28_800_000);
+  });
+
+  it("falls back to the default for non-numeric values", () => {
+    configureMinutes("forever");
+    expect(getAppDeploymentTimeoutMs()).toBe(3_600_000);
+  });
+
+  it("falls back to the default for NaN", () => {
+    configureMinutes(Number.NaN);
+    expect(getAppDeploymentTimeoutMs()).toBe(3_600_000);
+  });
+});
+
+// ─── AppDeploymentTimeoutError ───────────────────────────────────
+
+describe("AppDeploymentTimeoutError", () => {
+  it("names the step, the budget, and the setting to change", () => {
+    const err = new AppDeploymentTimeoutError("Publishing the app", 1_800_000);
+
+    expect(err.step).toBe("Publishing the app");
+    expect(err.timeoutMs).toBe(1_800_000);
+    expect(err.message).toContain("Publishing the app did not finish within 30m 00s");
+    expect(err.message).toContain("may still be running inside the container");
+    expect(err.message).toContain(APP_DEPLOYMENT_TIMEOUT_SETTING);
+  });
+
+  it("is an Error so the command layer can surface it directly", () => {
+    expect(new AppDeploymentTimeoutError("Syncing the app schema", 60_000))
+      .toBeInstanceOf(Error);
+  });
+});
+
+// ─── _deploymentStep (private, accessed via any) ─────────────────
+
+describe("_deploymentStep", () => {
+  const run = <T>(step: string, fn: () => Promise<T>) =>
+    (svc as any)._deploymentStep(step, fn);
+
+  it("passes the result through on success", async () => {
+    await expect(run("Publishing the app", async () => "ok")).resolves.toBe("ok");
+  });
+
+  it("translates a process timeout into an actionable deployment error", async () => {
+    const failing = () => Promise.reject(new ProcessTimeoutError("docker", 1_800_000));
+
+    await expect(run("Publishing the app", failing))
+      .rejects.toBeInstanceOf(AppDeploymentTimeoutError);
+    await run("Publishing the app", failing).catch((err: AppDeploymentTimeoutError) => {
+      expect(err.step).toBe("Publishing the app");
+      expect(err.timeoutMs).toBe(1_800_000);
+    });
+  });
+
+  it("leaves cancellation untouched so the caller can stay silent", async () => {
+    await expect(
+      run("Publishing the app", () => Promise.reject(new ProcessCancelledError("docker"))),
+    ).rejects.toBeInstanceOf(ProcessCancelledError);
+  });
+
+  it("leaves ordinary failures untouched", async () => {
+    await expect(
+      run("Publishing the app", () => Promise.reject(new Error("Publish-NAVApp: dependency missing"))),
+    ).rejects.toThrow("dependency missing");
   });
 });

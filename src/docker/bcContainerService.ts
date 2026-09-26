@@ -4,7 +4,8 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { DockerService } from "./dockerService";
 import { SWRCache } from "../services/swrCache";
-import { ProcessManager } from "../util/processManager";
+import { ElapsedProgressReporter, formatDuration } from "../util/elapsedProgress";
+import { ProcessCancelledError, ProcessManager, ProcessTimeoutError } from "../util/processManager";
 import { withRetry, isTransientDockerError } from "../util/retry";
 
 // ────────────────────────── Constants ───────────────────────────
@@ -12,6 +13,74 @@ import { withRetry, isTransientDockerError } from "../util/retry";
 const EXEC_TIMEOUT_MS = 120_000; // BC operations can be slow
 const BC_SERVER_INSTANCE = "BC";
 const CONTAINER_TEMP = "C:\\run\\my";
+const CONFIG_SECTION = "bcDockerManager";
+
+/**
+ * Fully qualified id of the setting that bounds a single app deployment step.
+ * Exported so the command layer can open it directly from an error notification.
+ */
+export const APP_DEPLOYMENT_TIMEOUT_SETTING = "bcDockerManager.appDeploymentTimeoutMinutes";
+
+/**
+ * Default budget for one app deployment step.
+ *
+ * Publishing, syncing, or installing an app is a single opaque BC operation
+ * whose duration scales with the size of the extension and the size of the
+ * database. A small per-tenant app finishes in seconds; a base application
+ * modification routinely runs past twenty minutes and can approach thirty on
+ * a large database. Sixty minutes leaves headroom for that case while still
+ * reporting a genuinely stuck call within the hour. The progress notification
+ * shows elapsed time and can be cancelled, so a generous default costs the
+ * user little, and the setting exists for installations that need more.
+ */
+const APP_DEPLOYMENT_TIMEOUT_DEFAULT_MINUTES = 60;
+
+/** Lower bound applied to the configured value. */
+const APP_DEPLOYMENT_TIMEOUT_MIN_MINUTES = 1;
+
+/** Upper bound applied to the configured value (8 hours). */
+const APP_DEPLOYMENT_TIMEOUT_MAX_MINUTES = 480;
+
+/**
+ * Resolve the per-step app deployment budget from user settings.
+ *
+ * The value is clamped rather than trusted. `settings.json` is hand-editable
+ * and syncs across machines, so a zero, a negative number, or a string can all
+ * reach this code path despite the JSON schema in package.json. Clamping keeps
+ * a malformed value from turning every deployment into an instant failure.
+ */
+export function getAppDeploymentTimeoutMs(): number {
+  const raw = vscode.workspace
+    .getConfiguration(CONFIG_SECTION)
+    .get<number>("appDeploymentTimeoutMinutes");
+
+  const minutes = typeof raw === "number" && Number.isFinite(raw)
+    ? raw
+    : APP_DEPLOYMENT_TIMEOUT_DEFAULT_MINUTES;
+
+  const clamped = Math.min(
+    Math.max(minutes, APP_DEPLOYMENT_TIMEOUT_MIN_MINUTES),
+    APP_DEPLOYMENT_TIMEOUT_MAX_MINUTES,
+  );
+  return Math.round(clamped * 60_000);
+}
+
+/**
+ * A deployment step exceeded its configured budget.
+ *
+ * Surfaces the step name and the budget so the command layer can offer to open
+ * the relevant setting instead of leaving the user to guess which knob to turn.
+ */
+export class AppDeploymentTimeoutError extends Error {
+  constructor(readonly step: string, readonly timeoutMs: number) {
+    super(
+      `${step} did not finish within ${formatDuration(timeoutMs)}. ` +
+      `The operation may still be running inside the container. ` +
+      `Increase "${APP_DEPLOYMENT_TIMEOUT_SETTING}" and try again once the container is idle.`,
+    );
+    this.name = "AppDeploymentTimeoutError";
+  }
+}
 
 /**
  * Chunk size for streaming file transfers between host and container.
@@ -105,13 +174,14 @@ export class BcContainerService {
     containerName: string,
     psCommand: string,
     timeoutMs = EXEC_TIMEOUT_MS,
+    signal?: AbortSignal,
   ): Promise<string> {
     try {
       return await withRetry(
         () => this._processManager.exec(
           "docker",
           ["exec", containerName, "powershell", "-NoProfile", "-Command", psCommand],
-          { timeoutMs, maxBufferBytes: 10 * 1024 * 1024 },
+          { timeoutMs, maxBufferBytes: 10 * 1024 * 1024, signal },
         ),
         { maxAttempts: 2, retryable: isTransientDockerError },
       );
@@ -132,6 +202,7 @@ export class BcContainerService {
     containerName: string,
     psCommand: string,
     timeoutMs = EXEC_TIMEOUT_MS,
+    signal?: AbortSignal,
   ): Promise<string> {
     await this._assertContainerRunning(containerName);
     try {
@@ -139,7 +210,7 @@ export class BcContainerService {
         () => this._processManager.exec(
           "docker",
           ["exec", containerName, "powershell", "-NoProfile", "-Command", NAV_MODULE_IMPORT + psCommand],
-          { timeoutMs, maxBufferBytes: 10 * 1024 * 1024 },
+          { timeoutMs, maxBufferBytes: 10 * 1024 * 1024, signal },
         ),
         { maxAttempts: 2, retryable: isTransientDockerError },
       );
@@ -155,8 +226,15 @@ export class BcContainerService {
    * unambiguously indicates a missing container. Container running-state is
    * verified via `docker inspect` in _assertContainerRunning before exec
    * is attempted.
+   *
+   * Timeout and cancellation errors pass through untouched. They carry
+   * structured detail that callers branch on, and running them through the
+   * PowerShell message cleaner would flatten them into plain Errors.
    */
   private static wrapExecError(err: unknown, containerName: string): Error {
+    if (err instanceof ProcessTimeoutError || err instanceof ProcessCancelledError) {
+      return err;
+    }
     if (!(err instanceof Error)) { return new Error(String(err)); }
     const msg = err.message;
     if (/no such container/i.test(msg)) {
@@ -206,6 +284,7 @@ export class BcContainerService {
     hostPath: string,
     containerPath: string,
     timeoutMs = FILE_TRANSFER_TIMEOUT_MS,
+    signal?: AbortSignal,
   ): Promise<void> {
     const ep = BcContainerService.escapePsPath(containerPath);
     const psCmd =
@@ -215,26 +294,38 @@ export class BcContainerService {
       `$s.Dispose()`;
 
     return new Promise<void>((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(new ProcessCancelledError("docker"));
+        return;
+      }
+
       const proc = this._processManager.spawn("docker", ["exec", "-i", containerName, "powershell", "-NoProfile", "-Command", psCmd]);
       let stderr = "";
       let settled = false;
 
+      const onAbort = () => fail(new ProcessCancelledError("docker"));
+
       const fail = (err: Error) => {
         if (settled) { return; }
         settled = true;
+        clearTimeout(timer);
+        signal?.removeEventListener("abort", onAbort);
         proc.kill();
         reject(err);
       };
 
       const timer = setTimeout(
-        () => fail(new Error("File transfer timed out")),
+        () => fail(new ProcessTimeoutError("docker", timeoutMs)),
         timeoutMs,
       );
 
+      signal?.addEventListener("abort", onAbort, { once: true });
+
       proc.stderr!.on("data", (d: Buffer) => { stderr += d.toString(); });
-      proc.on("error", (err: Error) => { clearTimeout(timer); fail(err); });
+      proc.on("error", (err: Error) => { fail(err); });
       proc.on("close", (code: number | null) => {
         clearTimeout(timer);
+        signal?.removeEventListener("abort", onAbort);
         if (settled) { return; }
         settled = true;
         if (code !== 0) {
@@ -270,7 +361,7 @@ export class BcContainerService {
         proc.stdin!.end();
       });
 
-      readStream.on("error", (err: Error) => { clearTimeout(timer); fail(err); });
+      readStream.on("error", (err: Error) => { fail(err); });
     });
   }
 
@@ -414,6 +505,38 @@ export class BcContainerService {
 
   // ── v1.1: Publish AL App ─────────────────────────────────────
 
+  /**
+   * Run one step of an app deployment and translate a process timeout into an
+   * error that names the step and points at the setting that governs it.
+   *
+   * Cancellation is deliberately left untranslated so the caller can tell a
+   * user-requested stop apart from a genuine failure.
+   */
+  private async _deploymentStep<T>(step: string, run: () => Promise<T>): Promise<T> {
+    try {
+      return await run();
+    } catch (err) {
+      if (err instanceof ProcessTimeoutError) {
+        throw new AppDeploymentTimeoutError(step, err.timeoutMs);
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Publish, sync, and install an AL app into a running container.
+   *
+   * Every step that waits on Business Central shares one configurable budget
+   * (`bcDockerManager.appDeploymentTimeoutMinutes`). Publishing a base
+   * application modification is a single opaque call that can run far longer
+   * than a per-tenant extension, and syncing or upgrading that same app is
+   * slower still, so a fixed budget only ever fits one size of app.
+   *
+   * The notification is cancellable and shows elapsed time per step. Cancelling
+   * stops the local docker client; the container keeps working on whatever it
+   * had already started, which the message states plainly rather than implying
+   * the deployment was rolled back.
+   */
   async publishApp(containerName: string): Promise<void> {
     const uris = await vscode.window.showOpenDialog({
       canSelectMany: false,
@@ -425,81 +548,147 @@ export class BcContainerService {
     const hostPath = uris[0].fsPath;
     const fileName = path.basename(hostPath);
     const containerPath = `${CONTAINER_TEMP}\\${fileName}`;
+    const stepTimeoutMs = getAppDeploymentTimeoutMs();
 
     await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: `Publishing ${fileName}…` },
-      async (progress) => {
-        // Step 1: Prepare container + fetch metadata in parallel
-        progress.report({ message: "Preparing…" });
-        const [serverInstance] = await Promise.all([
-          this.getServerInstance(containerName),
-          this.execInContainer(
-            containerName,
-            `if (!(Test-Path '${CONTAINER_TEMP}')) { New-Item -Path '${CONTAINER_TEMP}' -ItemType Directory -Force | Out-Null }`,
-          ),
-        ]);
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Publishing ${fileName}`,
+        cancellable: true,
+      },
+      async (progress, token) => {
+        const controller = new AbortController();
+        const signal = controller.signal;
+        const cancelSubscription = token.onCancellationRequested(() => controller.abort());
+        const reporter = new ElapsedProgressReporter(progress);
+        let copied = false;
 
-        // Step 2: Copy .app file into container
-        progress.report({ message: "Copying app to container..." });
-        await this.writeFileToContainer(containerName, hostPath, containerPath);
-
-        // Step 3: Publish the app
-        progress.report({ message: "Publishing app…" });
-        const publishCmd = [
-          `Publish-NAVApp`,
-          `-ServerInstance '${serverInstance}'`,
-          `-Path '${containerPath}'`,
-          `-SkipVerification`,
-        ].join(" ");
-        await this.execNavInContainer(containerName, publishCmd, 300_000);
-
-        // Step 4: Sync and install
-        progress.report({ message: "Syncing & installing…" });
-        const appInfo = await this.execNavInContainer(
-          containerName,
-          `Get-NAVAppInfo -Path '${containerPath}' | ConvertTo-Json -Depth 1`,
-        );
         try {
-          const info = JSON.parse(appInfo);
-          const appName = info.Name || info.name;
-          const appVersion = info.Version || info.version;
-          if (appName && appVersion) {
-            await this.execNavInContainer(
+          // Step 1: Prepare container + fetch metadata in parallel
+          reporter.step("Preparing");
+          const [serverInstance] = await Promise.all([
+            this.getServerInstance(containerName),
+            this.execInContainer(
               containerName,
-              `Sync-NAVApp -ServerInstance '${serverInstance}' -Name '${appName}' -Version '${appVersion}' -Mode ForceSync`,
-              120_000,
-            );
-            // Try install, but it may already be installed (upgrade case)
-            try {
-              await this.execNavInContainer(
+              `if (!(Test-Path '${CONTAINER_TEMP}')) { New-Item -Path '${CONTAINER_TEMP}' -ItemType Directory -Force | Out-Null }`,
+              EXEC_TIMEOUT_MS,
+              signal,
+            ),
+          ]);
+
+          // Step 2: Copy .app file into container
+          reporter.step("Copying app into container", FILE_TRANSFER_TIMEOUT_MS);
+          await this._deploymentStep("Copying the app into the container", () =>
+            this.writeFileToContainer(containerName, hostPath, containerPath, FILE_TRANSFER_TIMEOUT_MS, signal));
+          copied = true;
+
+          // Step 3: Publish the app
+          reporter.step("Publishing app", stepTimeoutMs);
+          const publishCmd = [
+            `Publish-NAVApp`,
+            `-ServerInstance '${serverInstance}'`,
+            `-Path '${containerPath}'`,
+            `-SkipVerification`,
+          ].join(" ");
+          await this._deploymentStep("Publishing the app", () =>
+            this.execNavInContainer(containerName, publishCmd, stepTimeoutMs, signal));
+
+          // Step 4: Sync and install
+          reporter.step("Reading app manifest");
+          const appInfo = await this.execNavInContainer(
+            containerName,
+            `Get-NAVAppInfo -Path '${containerPath}' | ConvertTo-Json -Depth 1`,
+            EXEC_TIMEOUT_MS,
+            signal,
+          );
+
+          let appName: string | undefined;
+          let appVersion: string | undefined;
+          try {
+            const info = JSON.parse(appInfo);
+            appName = info.Name || info.name;
+            appVersion = info.Version || info.version;
+          } catch {
+            // Manifest unreadable. The publish itself succeeded, so report that
+            // and let the user sync manually rather than failing the command.
+          }
+
+          if (appName && appVersion) {
+            reporter.step("Syncing app", stepTimeoutMs);
+            await this._deploymentStep("Syncing the app schema", () =>
+              this.execNavInContainer(
                 containerName,
-                `Install-NAVApp -ServerInstance '${serverInstance}' -Name '${appName}' -Version '${appVersion}' -Force`,
-                120_000,
-              );
-            } catch {
-              // If install fails, try Start-NAVAppDataUpgrade for upgrades
-              try {
-                await this.execNavInContainer(
+                `Sync-NAVApp -ServerInstance '${serverInstance}' -Name '${appName}' -Version '${appVersion}' -Mode ForceSync`,
+                stepTimeoutMs,
+                signal,
+              ));
+
+            // Install first. On an upgrade the app is already installed and
+            // Install-NAVApp fails, in which case the data upgrade is the
+            // correct path. A timeout in either call is a real failure and must
+            // not be swallowed by the fallback.
+            reporter.step("Installing app", stepTimeoutMs);
+            try {
+              await this._deploymentStep("Installing the app", () =>
+                this.execNavInContainer(
                   containerName,
-                  `Start-NAVAppDataUpgrade -ServerInstance '${serverInstance}' -Name '${appName}' -Version '${appVersion}' -Force`,
-                  120_000,
-                );
-              } catch {
-                // App may already be the latest - that's fine
+                  `Install-NAVApp -ServerInstance '${serverInstance}' -Name '${appName}' -Version '${appVersion}' -Force`,
+                  stepTimeoutMs,
+                  signal,
+                ));
+            } catch (installErr) {
+              if (
+                installErr instanceof AppDeploymentTimeoutError ||
+                installErr instanceof ProcessCancelledError
+              ) {
+                throw installErr;
+              }
+
+              reporter.step("Upgrading app data", stepTimeoutMs);
+              try {
+                await this._deploymentStep("Upgrading the app data", () =>
+                  this.execNavInContainer(
+                    containerName,
+                    `Start-NAVAppDataUpgrade -ServerInstance '${serverInstance}' -Name '${appName}' -Version '${appVersion}' -Force`,
+                    stepTimeoutMs,
+                    signal,
+                  ));
+              } catch (upgradeErr) {
+                if (
+                  upgradeErr instanceof AppDeploymentTimeoutError ||
+                  upgradeErr instanceof ProcessCancelledError
+                ) {
+                  throw upgradeErr;
+                }
+                // Already at this version. Nothing to upgrade.
               }
             }
           }
-        } catch {
-          // Could not parse app info - publish succeeded, user can sync manually
+
+          vscode.window.showInformationMessage(`App "${fileName}" published to "${containerName}".`);
+        } catch (err) {
+          if (err instanceof ProcessCancelledError || token.isCancellationRequested) {
+            vscode.window.showWarningMessage(
+              `Publishing "${fileName}" was cancelled. The container may still be processing the app.`,
+            );
+            return;
+          }
+          throw err;
+        } finally {
+          reporter.dispose();
+          cancelSubscription.dispose();
+
+          // Best effort cleanup on every exit path. A cancelled or timed-out
+          // publish previously left the staged .app behind in the container.
+          // Run it unsignalled so cancellation does not skip the cleanup.
+          if (copied) {
+            await this.execInContainer(
+              containerName,
+              `Remove-Item -Path '${containerPath}' -Force -ErrorAction SilentlyContinue`,
+              30_000,
+            ).catch(() => {});
+          }
         }
-
-        // Step 6: Cleanup
-        await this.execInContainer(
-          containerName,
-          `Remove-Item -Path '${containerPath}' -Force -ErrorAction SilentlyContinue`,
-        ).catch(() => {});
-
-        vscode.window.showInformationMessage(`App "${fileName}" published to "${containerName}".`);
       },
     );
   }
@@ -818,7 +1007,10 @@ export class BcContainerService {
           );
         }
 
-        // Publish each app
+        // Publish each app. Test toolkit apps are large and the full toolkit
+        // installs dozens of them, so they share the same configurable budget
+        // as a normal app deployment.
+        const stepTimeoutMs = getAppDeploymentTimeoutMs();
         let published = 0;
         for (const app of apps) {
           progress.report({ message: `Publishing ${app.Name} (${++published}/${apps.length})…` });
@@ -826,7 +1018,7 @@ export class BcContainerService {
             await this.execNavInContainer(
               containerName,
               `Publish-NAVApp -ServerInstance '${serverInstance}' -Path '${app.FullName}' -SkipVerification -Install`,
-              120_000,
+              stepTimeoutMs,
             );
           } catch {
             // Some apps may have dependency issues - continue

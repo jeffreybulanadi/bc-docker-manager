@@ -1,3 +1,4 @@
+import { ProcessCancelledError, ProcessTimeoutError } from "./processManager";
 import { withRetry, isTransientDockerError } from "./retry";
 
 describe("withRetry", () => {
@@ -45,5 +46,13 @@ describe("isTransientDockerError", () => {
 
   it("returns false for permanent errors", () => {
     expect(isTransientDockerError(new Error("container not found"))).toBe(false);
+  });
+
+  it("returns false for a timeout even though the message mentions a timeout", () => {
+    expect(isTransientDockerError(new ProcessTimeoutError("docker", 300_000))).toBe(false);
+  });
+
+  it("returns false for a cancellation", () => {
+    expect(isTransientDockerError(new ProcessCancelledError("docker"))).toBe(false);
   });
 });

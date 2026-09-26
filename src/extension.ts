@@ -3,7 +3,11 @@ import { exec } from "child_process";
 import { DockerService } from "./docker/dockerService";
 import { DockerSetup } from "./docker/dockerSetup";
 import { LaunchJsonService } from "./docker/launchJsonService";
-import { BcContainerService } from "./docker/bcContainerService";
+import {
+  APP_DEPLOYMENT_TIMEOUT_SETTING,
+  AppDeploymentTimeoutError,
+  BcContainerService,
+} from "./docker/bcContainerService";
 import { BcArtifactsService } from "./registry/bcArtifactsService";
 import { ContainerProvider } from "./tree/containerProvider";
 import { ImageProvider } from "./tree/imageProvider";
@@ -1065,7 +1069,26 @@ function withProgress(title: string, task: () => Promise<void>): Thenable<void> 
 
 function showError(action: string, name: string, err: unknown): void {
   const msg = err instanceof Error ? err.message : String(err);
-  vscode.window.showErrorMessage(`Failed to ${action} "${name}": ${msg}`);
+  const text = `Failed to ${action} "${name}": ${msg}`;
+
+  // A deployment timeout is almost always a budget that is too small for the
+  // app being deployed, so take the user straight to the setting instead of
+  // making them search for it.
+  if (err instanceof AppDeploymentTimeoutError) {
+    vscode.window
+      .showErrorMessage(text, "Adjust Timeout")
+      .then((choice) => {
+        if (choice === "Adjust Timeout") {
+          vscode.commands.executeCommand(
+            "workbench.action.openSettings",
+            APP_DEPLOYMENT_TIMEOUT_SETTING,
+          );
+        }
+      });
+  } else {
+    vscode.window.showErrorMessage(text);
+  }
+
   sendError("command/failed", { action, name, message: msg });
 }
 

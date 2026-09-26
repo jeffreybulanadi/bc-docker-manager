@@ -481,6 +481,7 @@ Open **Settings > Extensions > BC Docker Manager** to configure defaults. All se
 | `bcDockerManager.defaultDns` | string | `8.8.8.8` | DNS server for new containers. Use your corporate DNS if containers need to reach internal resources. |
 | `bcDockerManager.defaultArtifactType` | string | `sandbox` | Default artifact type when the Artifacts Explorer opens: `sandbox` or `onprem`. |
 | `bcDockerManager.showReleaseNotesOnUpdate` | boolean | `true` | When `true`, the release notes panel opens automatically the first time VS Code starts after a new version is installed. Set to `false` to disable. |
+| `bcDockerManager.appDeploymentTimeoutMinutes` | number | `60` | Maximum time, in minutes, allowed for a single app deployment step: publishing, syncing, installing, or upgrading app data. Accepts 1 to 480. The default suits most extensions. Raise it when deploying large apps such as base application modifications, which can take the better part of an hour on a large database. |
 
 ### Isolation Modes
 

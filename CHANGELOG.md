@@ -7,6 +7,37 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.6.0] - 2026-09-26
+
+### Highlights
+
+- **Adjustable app deployment timeout:** Large apps such as base application modifications can now be published without hitting a fixed five minute limit. The limit defaults to 60 minutes and can be changed in settings.
+- **Visible, cancellable publishing:** The publish notification shows how long the current step has been running and can be cancelled at any time.
+
+### Added
+
+- New setting `bcDockerManager.appDeploymentTimeoutMinutes` controls how long a single app deployment step is allowed to run. It applies to publishing, syncing, installing, and upgrading app data, and to the Install Test Toolkit command. The default is 60 minutes and the accepted range is 1 to 480 minutes. Requested by [@mhyattshemengroup](https://github.com/mhyattshemengroup) in [#26](https://github.com/jeffreybulanadi/bc-docker-manager/issues/26).
+
+- Publishing an app can now be cancelled from the progress notification, and the notification shows how long the current step has been running along with the limit that applies to it. A long publish is no longer indistinguishable from a hang.
+
+### Fixed
+
+- Publishing a large app no longer fails after five minutes with "Process docker timed out after 300000ms". The five minute cap on publishing, and the two minute caps on syncing, installing, and upgrading app data, were far too small for base application modifications. All of these steps now share the configurable limit above. Reported by [@mhyattshemengroup](https://github.com/mhyattshemengroup) in [#26](https://github.com/jeffreybulanadi/bc-docker-manager/issues/26).
+
+- When a deployment step does run out of time, the message says which step it was, how long it waited, and that the container may still be working on the app. The notification offers a button that opens the timeout setting directly.
+
+- A failed install no longer hides a timeout. Previously, if installing an app timed out, the extension silently fell through to a data upgrade attempt and then reported success, leaving the app in an unknown state.
+
+- The staged .app file is now removed from the container after a failed or cancelled publish, not only after a successful one.
+
+- Timed-out container operations are no longer retried. A retry doubled the wait for an operation that was already slow, while the original operation was usually still running inside the container.
+
+### Thank you
+
+* [@mhyattshemengroup](https://github.com/mhyattshemengroup) - reported the publish timeout on large base application modifications ([#26](https://github.com/jeffreybulanadi/bc-docker-manager/issues/26))
+
+---
+
 ## [1.5.3] - 2026-05-10
 
 ### Fixed
