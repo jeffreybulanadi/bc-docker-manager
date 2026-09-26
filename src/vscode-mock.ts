@@ -37,8 +37,11 @@ const window = {
     dispose: jest.fn(),
     visible: true,
   }),
-  withProgress: jest.fn().mockImplementation((_opts: any, task: (p: any) => Promise<any>) =>
-    task({ report: jest.fn() })
+  withProgress: jest.fn().mockImplementation((_opts: any, task: (p: any, t: any) => Promise<any>) =>
+    task(
+      { report: jest.fn() },
+      { isCancellationRequested: false, onCancellationRequested: jest.fn(() => ({ dispose: jest.fn() })) },
+    )
   ),
 };
 

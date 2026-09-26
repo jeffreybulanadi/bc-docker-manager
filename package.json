@@ -2,7 +2,7 @@
   "name": "bc-docker-manager",
   "displayName": "BC Docker Manager",
   "description": "Manage Business Central Docker containers from VS Code - browse artifacts, create containers, develop AL apps, and configure your environment without BcContainerHelper or Docker Desktop.",
-  "version": "1.5.3",
+  "version": "1.6.0",
   "icon": "resources/icon.png",
   "publisher": "jeffreybulanadi",
   "author": {
@@ -155,6 +155,13 @@
           "type": "boolean",
           "default": true,
           "description": "Show the release notes panel automatically when a new version of BC Docker Manager is installed."
+        },
+        "bcDockerManager.appDeploymentTimeoutMinutes": {
+          "type": "number",
+          "default": 60,
+          "minimum": 1,
+          "maximum": 480,
+          "description": "Maximum time, in minutes, to wait for a single app deployment step (publish, sync, install, or data upgrade) inside a container. Raise this when deploying large apps such as base application modifications."
         }
       }
     },

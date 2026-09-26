@@ -8,6 +8,8 @@
  * Reference: https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
  */
 
+import { ProcessCancelledError, ProcessTimeoutError } from "./processManager";
+
 export interface RetryOptions {
   /** Maximum number of attempts (including the first). Default: 3. */
   maxAttempts?: number;
@@ -63,8 +65,16 @@ export async function withRetry<T>(
 /**
  * Return true if an error from a Docker CLI call is likely transient.
  * Examples: socket temporarily unavailable, daemon busy, network blip.
+ *
+ * Timeouts and cancellations are never transient. Retrying a timed-out
+ * operation doubles the wall-clock cost of an already slow call, and the
+ * original work usually keeps running inside the container, so a second
+ * attempt would race the first.
  */
 export function isTransientDockerError(err: unknown): boolean {
+  if (err instanceof ProcessTimeoutError || err instanceof ProcessCancelledError) {
+    return false;
+  }
   if (!(err instanceof Error)) { return false; }
   const msg = err.message.toLowerCase();
   return (
